@@ -1,0 +1,47 @@
+
+starlightCode='StarlightChains_v04RR_25klines_1000Base.exe'
+
+outdir = './synt/' # Starlight output directory
+
+procs = 37  # Number of processors you will use
+
+dataext = '.spec' # extension of the input files
+
+base_dir='./BasesDir/xsl/parsec/Kroupa/cut3500_24500_R2000/' # path to basesDir
+
+obs_dir= './'  # path to the observation dir 
+
+mask_dir='./'  # path to the masks dir 
+
+OnlyOneMask=False # If you want to use a standard mask or not.
+
+TheMask = 'MaskDefault.sm' # the default mask file.
+
+NewStarlightVersion=False
+extraBase=False
+
+#############################################################################
+#                                                                           #
+#                      STARLIGHT PARAMETERS                                 #
+#                                                                           #
+#############################################################################
+ConfigFile= 'StCv04.C99.config'  # Starlight config file
+BaseFile = 'BasesXSL.Krupa.PC.RR'   # Base file for Starlight
+ReddenigLaw = 'CCM' # Reddenign laws, see manual
+VelocityShift = 0 # Radial velocity gess
+VelocityDisp = 150 # Velocity dispersion
+
+
+seed=33087221                       # seed, your phone number
+llow_SN = 12200.0                     # [llow_SN]   lower-lambda of S/N window
+lupp_SN = 12250.0                     # [lupp_SN]   upper-lambda of S/N window
+Olsyn_ini = 3850.0                   # [Olsyn_ini] lower-lambda for fit
+Olsyn_fin = 24000.0                   # [Olsyn_fin] upper-lambda for fit
+DeltaLamb = 1.0                       # [Odlsyn]    delta-lambda for fit
+fscale_chi2 = 1.0                     # [fscale_chi2] fudge-factor for chi2
+kinematics = 'FIT'                   # [FIT/FXK] Fit or Fix kinematics
+IsErrSpecAvailable = 0                # [IsErrSpecAvailable]  1/0 = Yes/No
+IsFlagSpecAvailable = 0               # [IsFlagSpecAvailable] 1/0 = Yes/No
+
+
+
