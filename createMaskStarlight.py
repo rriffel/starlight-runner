@@ -23,5 +23,5 @@ files = glob.glob('*.spec')
 
 
 for f in files:
-     makemask=starlightMask(f,'mask_'+re.sub('.spec','.sm',f),False, False)
+     makemask=starlightMask(f,'mask_'+re.sub('.spec','.mask',f),False, False)
 

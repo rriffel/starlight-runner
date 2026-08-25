@@ -1,0 +1,16 @@
+1
+BasesDir/xsl/parsec/Kroupa/cut3500_24500_R2000/    [base_dir]
+laura_major/                            [obs_dir]
+mask_dir/                               [mask_dir]
+synt/                                   [out_dir]
+33087221                                [your phone number]
+12200.0                                 [llow_SN]   lower-lambda of S/N window
+12250.0                                 [lupp_SN]   upper-lambda of S/N window
+9000.0                                  [Olsyn_ini] lower-lambda for fit
+24000.0                                 [Olsyn_fin] upper-lambda for fit
+1.0                                     [Odlsyn]    delta-lambda for fit
+1.0                                     [fscale_chi2] fudge-factor for chi2
+FIT                                     [FIT/FXK] Fit or Fix kinematics
+1                                       [IsErrSpecAvailable]  1/0 = Yes/No
+0                                       [IsFlagSpecAvailable] 1/0 = Yes/No
+comb_major_6_clean.spec StCv04.C99.config BasesXSLKrupaPCRR comb_major_6_clean.mask CCM 0.0 150.0 comb_major_6_clean.out

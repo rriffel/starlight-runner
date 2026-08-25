@@ -110,7 +110,7 @@ class MaskSpec():
 
 
 
-def starlightMask(filename,maskname='mask.sm',new_mask=True,opticalStdMask=False,fitRange=[-1.0,-1.0]):
+def starlightMask(filename,maskname='mask.mask',new_mask=True,opticalStdMask=False,fitRange=[-1.0,-1.0]):
     ''' This function uses the class MaskSpec to create mask for the starlight code.
         It alow for edditing existing masks or creating new ones.
         
@@ -130,7 +130,7 @@ def starlightMask(filename,maskname='mask.sm',new_mask=True,opticalStdMask=False
          
     example:
     
-    starlightMask(filename,maskname='mask.sm',new_mask=True,opticalStdMask=False,fitRange=[-1.0,-1.0])
+    starlightMask(filename,maskname='mask.mask',new_mask=True,opticalStdMask=False,fitRange=[-1.0,-1.0])
     
     '''
     

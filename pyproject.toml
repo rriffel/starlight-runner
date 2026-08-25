@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "starlight-runner"
+version = "1.0.0"
+description = "A modern GUI and workflow tool for preparing spectra, creating masks, running STARLIGHT stellar population synthesis, and analyzing results."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Rogério Riffel", email = "riffel@ufrgs.br"}
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "matplotlib",
+    "PyQt5",
+]
+
+[project.urls]
+Homepage = "https://github.com/rriffel/starlight-runner"
+Repository = "https://github.com/rriffel/starlight-runner"
+
+[project.scripts]
+starlight-runner = "starlight_runner.main_gui:main"
+
+[project.gui-scripts]
+starlight-runner-gui = "starlight_runner.main_gui:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["starlight_runner*"]
+
+[tool.setuptools.package-data]
+starlight_runner = ["templates/*", "assets/*"]
