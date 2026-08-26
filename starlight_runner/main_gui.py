@@ -22,7 +22,7 @@ import pandas as pd
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
-from PyQt5.QtGui import QFont, QPalette, QColor, QIcon
+from PyQt5.QtGui import QFont, QPalette, QColor, QIcon, QPixmap
 
 import matplotlib
 matplotlib.use('Qt5Agg')
@@ -47,13 +47,29 @@ from .gui.results_mixin import ResultsMixin
 from .gui.config_mixin import ConfigMixin
 
 
-
+def get_logo_path():
+    """Locate the logo image file from package assets or project directories."""
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "assets", "logo.jpeg"),
+        os.path.join(os.path.dirname(__file__), "assets", "logo.jpg"),
+        os.path.join(os.path.dirname(__file__), "..", "logo.jpeg"),
+        os.path.join(os.path.dirname(__file__), "..", "logo.jpg"),
+        os.path.join(os.getcwd(), "logo.jpeg"),
+        os.path.join(os.getcwd(), "logo.jpg"),
+    ]
+    for c in candidates:
+        if os.path.exists(c):
+            return os.path.abspath(c)
+    return None
 
 
 class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, ResultsMixin, ConfigMixin):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Starlight stellar population runner & analyser")
+        self.setWindowTitle("STARLIGHT Stellar Population Runner & Analyser")
+        logo_path = get_logo_path()
+        if logo_path:
+            self.setWindowIcon(QIcon(logo_path))
 
         # Pylight Configuration (from ConfigPylight)
         self.pylight_config = {
@@ -151,9 +167,23 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
         title_label = QLabel("STARLIGHT")
         title_label.setStyleSheet(f"font-size: 18px; font-weight: 800; color: {ACCENT}; margin-bottom: 2px;")
         sub_label = QLabel("Runner & Analyser v1.0")
-        sub_label.setStyleSheet(f"font-size: 11px; color: {MUTED}; margin-bottom: 16px;")
+        sub_label.setStyleSheet(f"font-size: 11px; color: {MUTED}; margin-bottom: 8px;")
         layout.addWidget(title_label)
         layout.addWidget(sub_label)
+
+        # Inset Logo before Step 1
+        logo_path = get_logo_path()
+        if logo_path:
+            logo_pix = QPixmap(logo_path)
+            if not logo_pix.isNull():
+                lbl_logo = QLabel()
+                scaled_pix = logo_pix.scaledToWidth(216, Qt.SmoothTransformation)
+                lbl_logo.setPixmap(scaled_pix)
+                lbl_logo.setAlignment(Qt.AlignCenter)
+                lbl_logo.setStyleSheet(
+                    f"border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 2px; background-color: #FFFFFF; margin-bottom: 12px;"
+                )
+                layout.addWidget(lbl_logo)
 
         # Step Navigation Buttons
         self.nav_buttons = []
@@ -252,12 +282,35 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    app.setApplicationName("STARLIGHT Runner & Analyser")
     
     # Configure global font
     font = QFont("Inter", 10)
     app.setFont(font)
+
+    # Set Window / App Icon
+    logo_path = get_logo_path()
+    if logo_path:
+        app.setWindowIcon(QIcon(logo_path))
+
+    # Startup Splash Screen
+    splash = None
+    if logo_path:
+        logo_pix = QPixmap(logo_path)
+        if not logo_pix.isNull():
+            splash_pix = logo_pix.scaledToWidth(480, Qt.SmoothTransformation)
+            splash = QSplashScreen(splash_pix, Qt.WindowStaysOnTopHint)
+            splash.showMessage(
+                "  STARLIGHT Runner & Analyser — Initializing...",
+                Qt.AlignBottom | Qt.AlignLeft,
+                QColor("#FFFFFF")
+            )
+            splash.show()
+            app.processEvents()
     
     window = MainWindow()
+    if splash:
+        splash.finish(window)
     window.show()
     sys.exit(app.exec_())
 
