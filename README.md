@@ -18,49 +18,61 @@ A modern, high-performance workflow suite and graphical interface for the **STAR
 
 ---
 
-## 📦 Installation
+## 📦 Installation Instructions
 
-### 1. Create a Conda Environment (Recommended)
-We recommend creating a dedicated Conda / Mamba environment with Python 3.10:
+### 1. Prerequisites & Conda Environment Setup (Recommended)
+We strongly recommend creating a dedicated Conda / Miniforge / Mamba virtual environment with **Python 3.10**:
 
 ```bash
-# Create the environment
+# 1. Create a fresh conda environment
 conda create -n starlight_env python=3.10 -y
 
-# Activate the environment
+# 2. Activate the environment
 conda activate starlight_env
 ```
 
 ---
 
-### 2. Install `starlight-runner`
+### 2. Installing `starlight-runner`
 
-#### Option A: Direct Install via `pip` (from GitHub)
-Install directly into your active environment without cloning manually:
+#### Option A: Direct Installation via `pip` (Fastest)
+Install the package directly from GitHub into your active environment:
 
 ```bash
 pip install git+https://github.com/rriffel/starlight-runner.git
 ```
 
-#### Option B: Local / Development Install (Editable Mode)
-If you want to clone the repository for development or to access example test files and configuration templates:
+#### Option B: Clone & Install in Editable / Development Mode
+If you want to access the example spectra (`testfiles/`), base templates (`starlight_stuff/`), or modify the source code:
 
 ```bash
+# 1. Clone the repository
 git clone https://github.com/rriffel/starlight-runner.git
+
+# 2. Enter the project directory
 cd starlight-runner
+
+# 3. Install in editable mode (-e)
 pip install -e .
 ```
 
 ---
 
 ### 3. Dependencies
-All required dependencies are installed automatically by `pip`. They can also be installed manually via:
+All required scientific packages (`numpy`, `scipy`, `pandas`, `matplotlib`, `PyQt5`) are resolved and installed automatically by `pip`. You can also manually install them via:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-*Required packages: `numpy`, `scipy`, `pandas`, `matplotlib`, `PyQt5`.*
+---
+
+### 4. Verify Installation
+To confirm everything is installed correctly, run the automated test suite:
+
+```bash
+python -m unittest discover tests
+```
 
 ---
 
