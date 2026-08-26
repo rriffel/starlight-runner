@@ -281,6 +281,11 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
     # -------------------------------------------------------------
 
 def main():
+    if "--test" in sys.argv or "-t" in sys.argv:
+        from .tests import run_tests
+        success = run_tests()
+        sys.exit(0 if success else 1)
+
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setApplicationName("STARLIGHT Runner & Analyser")

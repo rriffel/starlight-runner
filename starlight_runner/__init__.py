@@ -22,3 +22,10 @@ from .masking import SpectralMask
 from .runner import StarlightConfig, generate_grid_files, run_single_grid, run_starlight_batch
 from .parser import StarlightOutput
 
+
+def test():
+    """Run all unit tests for the starlight_runner package."""
+    from .tests import run_tests
+    return run_tests()
+
+

@@ -107,16 +107,16 @@ class GridMixin:
         row_base_dir.addWidget(btn_browse_base_dir)
         f_paths.addRow("Bases Directory:", row_base_dir)
 
-        # Base Manifest File with Browse button
+        # Base File with Browse button
         row_base_file = QHBoxLayout()
         self.txt_base_file = QLineEdit(self.starlight_config.base_file)
         btn_browse_base_file = QPushButton("...")
         btn_browse_base_file.setFixedWidth(36)
-        btn_browse_base_file.setToolTip("Select Base Manifest File (e.g. BasesXSLKrupaPCRR, BaseHRpyPopStarChab)")
+        btn_browse_base_file.setToolTip("Select Base File (e.g. BasesXSLKrupaPCRR, BaseHRpyPopStarChab)")
         btn_browse_base_file.clicked.connect(self._on_browse_base_file)
         row_base_file.addWidget(self.txt_base_file)
         row_base_file.addWidget(btn_browse_base_file)
-        f_paths.addRow("Base Manifest File:", row_base_file)
+        f_paths.addRow("Base File:", row_base_file)
 
         # Output Directory with Browse button
         row_out = QHBoxLayout()
@@ -323,7 +323,7 @@ class GridMixin:
             self.starlight_config.base_dir = rel
 
     def _on_browse_base_file(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Select Base Manifest File (e.g. BasesXSLKrupaPCRR, BaseHRpyPopStarChab)", self.txt_base_file.text(), "All Files (*)")
+        f, _ = QFileDialog.getOpenFileName(self, "Select Base File (e.g. BasesXSLKrupaPCRR, BaseHRpyPopStarChab)", self.txt_base_file.text(), "All Files (*)")
         if f:
             rel = os.path.basename(f)
             self.txt_base_file.setText(rel)
@@ -433,7 +433,7 @@ class GridMixin:
         base_dir = self.txt_base_dir.text().strip()
         
         if not base_file or not os.path.exists(base_file):
-            return False, f"Base Manifest File not found: {base_file}"
+            return False, f"Base File not found: {base_file}"
             
         if not base_dir or not os.path.exists(base_dir):
             return False, f"Bases Directory not found: {base_dir}"

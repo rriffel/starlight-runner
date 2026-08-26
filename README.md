@@ -71,11 +71,16 @@ pip install -r requirements.txt
 ---
 
 ### 4. Verify Installation
-To confirm everything is installed correctly, run the automated test suite:
+To confirm everything is installed correctly, run the automated test suite directly inside your conda environment (from any directory):
 
 ```bash
-python -m unittest discover tests
+python -m unittest starlight_runner.tests
 ```
+or directly via the CLI flag:
+```bash
+starlight-runner --test
+```
+*(Note: If you are inside the cloned repository root directory, `python -m unittest discover tests` also works).*
 
 ---
 
@@ -132,9 +137,9 @@ python -m starlight_runner
 ### Step ③ — STARLIGHT Grid Generator & Parallel Execution
 1. **Configuration:**
    - Select the STARLIGHT binary (`starlight_stuff/StarlightChains_v04RR_25klines_1000Base.exe`).
-   - Choose observed spectra directory (e.g. `testfiles/`), mask directory, `.config` file (`starlight_stuff/StCv04.C99.config`), base library directory, and base manifest file (`starlight_stuff/BasesXSLKrupaPCRR`).
+   - Choose observed spectra directory (e.g. `testfiles/`), mask directory, `.config` file (`starlight_stuff/StCv04.C99.config`), base library directory, and base file (`starlight_stuff/BasesXSLKrupaPCRR`).
 2. **Batch Grid Generation:** Automatically matches all spectrum files against corresponding masks and creates `grid_*.inp` files.
-3. **Base Library Verification:** Validates that all SSP FITS/text files referenced in the base manifest exist before launching.
+3. **Base Library Verification:** Validates that all SSP FITS/text files referenced in the base file exist before launching.
 4. **Parallel Execution:**
    - Multi-process worker pool utilizing all available CPU cores.
    - Real-time log console streaming STARLIGHT output per grid.
@@ -216,7 +221,7 @@ starlight-runner/
 ├── starlight_stuff/                              # Auxiliary STARLIGHT & PyLight files
 │   ├── StarlightChains_v04RR_25klines_1000Base.exe   # STARLIGHT binary (Linux x86_64)
 │   ├── StCv04.C99.config                             # STARLIGHT default configuration template
-│   ├── BasesXSLKrupaPCRR                             # Base manifest example (XSL / Kroupa)
+│   ├── BasesXSLKrupaPCRR                             # Base file example (XSL / Kroupa)
 │   ├── ConfigPylight                                 # PyLight plotting configuration
 │   └── ConfigToStarlight                             # STARLIGHT grid configuration mapping
 ├── testfiles/                                    # Example test spectra & masks
