@@ -43,7 +43,7 @@ class GridMixin:
         self.txt_exe = QLineEdit(self.starlight_config.starlight_exe)
         btn_browse_exe = QPushButton("...")
         btn_browse_exe.setFixedWidth(36)
-        btn_browse_exe.setToolTip("Selecionar Executável STARLIGHT")
+        btn_browse_exe.setToolTip("Select STARLIGHT Executable")
         btn_browse_exe.clicked.connect(self._on_browse_exe)
         row_exe.addWidget(self.txt_exe)
         row_exe.addWidget(btn_browse_exe)
@@ -52,10 +52,10 @@ class GridMixin:
         # Obs Spectra Dir with Browse button
         row_obs = QHBoxLayout()
         self.txt_obs_dir = QLineEdit(self.starlight_config.obs_dir)
-        self.txt_obs_dir.setPlaceholderText("Pasta (ex: laura_major) ou padrão")
+        self.txt_obs_dir.setPlaceholderText("Folder (e.g. laura_major) or pattern")
         btn_browse_obs = QPushButton("...")
         btn_browse_obs.setFixedWidth(36)
-        btn_browse_obs.setToolTip("Selecionar Diretório dos Espectros Observados")
+        btn_browse_obs.setToolTip("Select Observed Spectra Directory")
         btn_browse_obs.clicked.connect(self._on_browse_obs_dir)
         row_obs.addWidget(self.txt_obs_dir)
         row_obs.addWidget(btn_browse_obs)
@@ -90,7 +90,7 @@ class GridMixin:
         self.txt_config_file = QLineEdit(self.starlight_config.config_file)
         btn_browse_config = QPushButton("...")
         btn_browse_config.setFixedWidth(36)
-        btn_browse_config.setToolTip("Selecionar Arquivo de Configuration (.config)")
+        btn_browse_config.setToolTip("Select Configuration File (.config)")
         btn_browse_config.clicked.connect(self._on_browse_config_file)
         row_config.addWidget(self.txt_config_file)
         row_config.addWidget(btn_browse_config)
@@ -101,7 +101,7 @@ class GridMixin:
         self.txt_base_dir = QLineEdit(self.starlight_config.base_dir)
         btn_browse_base_dir = QPushButton("...")
         btn_browse_base_dir.setFixedWidth(36)
-        btn_browse_base_dir.setToolTip("Selecionar Diretório das Populações Base")
+        btn_browse_base_dir.setToolTip("Select Base Populations Directory")
         btn_browse_base_dir.clicked.connect(self._on_browse_base_dir)
         row_base_dir.addWidget(self.txt_base_dir)
         row_base_dir.addWidget(btn_browse_base_dir)
@@ -112,7 +112,7 @@ class GridMixin:
         self.txt_base_file = QLineEdit(self.starlight_config.base_file)
         btn_browse_base_file = QPushButton("...")
         btn_browse_base_file.setFixedWidth(36)
-        btn_browse_base_file.setToolTip("Selecionar Arquivo Base Manifest (ex: BasesXSLKrupaPCRR, BaseHRpyPopStarChab)")
+        btn_browse_base_file.setToolTip("Select Base Manifest File (e.g. BasesXSLKrupaPCRR, BaseHRpyPopStarChab)")
         btn_browse_base_file.clicked.connect(self._on_browse_base_file)
         row_base_file.addWidget(self.txt_base_file)
         row_base_file.addWidget(btn_browse_base_file)
@@ -123,7 +123,7 @@ class GridMixin:
         self.txt_out_dir = QLineEdit(self.starlight_config.out_dir)
         btn_browse_out_dir = QPushButton("...")
         btn_browse_out_dir.setFixedWidth(36)
-        btn_browse_out_dir.setToolTip("Selecionar Diretório de Saída dos Resultados")
+        btn_browse_out_dir.setToolTip("Select Output Directory")
         btn_browse_out_dir.clicked.connect(self._on_browse_out_dir)
         row_out.addWidget(self.txt_out_dir)
         row_out.addWidget(btn_browse_out_dir)
@@ -163,6 +163,22 @@ class GridMixin:
         self.combo_kinematics.addItems(["FIT", "FXK"])
         f_pars.addRow("Kinematics:", self.combo_kinematics)
 
+        self.chk_err_spec = QCheckBox("Error spectrum available")
+        self.chk_err_spec.setChecked(bool(self.starlight_config.is_err_available))
+        self.chk_err_spec.setToolTip("[IsErrSpecAvailable] 1/0 = Yes/No")
+        f_pars.addRow("Error Spectrum:", self.chk_err_spec)
+
+        self.chk_flag_spec = QCheckBox("Flag spectrum available")
+        self.chk_flag_spec.setChecked(bool(self.starlight_config.is_flag_available))
+        self.chk_flag_spec.setToolTip("[IsFlagSpecAvailable] 1/0 = Yes/No")
+        f_pars.addRow("Flag Spectrum:", self.chk_flag_spec)
+
+        self.spin_seed = QSpinBox()
+        self.spin_seed.setRange(1, 2147483647)
+        self.spin_seed.setValue(self.starlight_config.seed)
+        self.spin_seed.setToolTip("[your phone number] — Random seed for the Markov Chain fits")
+        f_pars.addRow("Seed (phone number):", self.spin_seed)
+
         self.spin_procs = QSpinBox()
         self.spin_procs.setRange(1, os.cpu_count() or 4)
         self.spin_procs.setValue(min(4, os.cpu_count() or 4))
@@ -176,10 +192,19 @@ class GridMixin:
         btn_generate_grids.clicked.connect(self._on_generate_grids)
         left_layout.addWidget(btn_generate_grids)
 
+        btn_run_layout = QHBoxLayout()
         self.btn_run_starlight = QPushButton("Run STARLIGHT")
-        self.btn_run_starlight.setStyleSheet("background-color: #10B981; color: white; font-size: 14px;")
+        self.btn_run_starlight.setStyleSheet("background-color: #10B981; color: white; font-size: 14px; font-weight: bold; padding: 6px;")
         self.btn_run_starlight.clicked.connect(self._on_run_starlight_clicked)
-        left_layout.addWidget(self.btn_run_starlight)
+
+        self.btn_stop_starlight = QPushButton("Stop")
+        self.btn_stop_starlight.setStyleSheet("background-color: #EF4444; color: white; font-size: 14px; font-weight: bold; padding: 6px;")
+        self.btn_stop_starlight.setEnabled(False)
+        self.btn_stop_starlight.clicked.connect(self._on_stop_starlight_clicked)
+
+        btn_run_layout.addWidget(self.btn_run_starlight, 3)
+        btn_run_layout.addWidget(self.btn_stop_starlight, 1)
+        left_layout.addLayout(btn_run_layout)
 
         left_layout.addStretch()
 
@@ -240,14 +265,14 @@ class GridMixin:
             return path
 
     def _on_browse_exe(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Selecionar Executável STARLIGHT", self.txt_exe.text(), "All Files (*)")
+        f, _ = QFileDialog.getOpenFileName(self, "Select STARLIGHT Executable", self.txt_exe.text(), "All Files (*)")
         if f:
             rel = self._to_relpath(f)
             self.txt_exe.setText(rel)
             self.starlight_config.starlight_exe = rel
 
     def _on_browse_obs_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "Selecionar Diretório dos Espectros Observados", self.txt_obs_dir.text())
+        d = QFileDialog.getExistingDirectory(self, "Select Observed Spectra Directory", self.txt_obs_dir.text())
         if d:
             rel = self._to_relpath(d)
             self.txt_obs_dir.setText(rel)
@@ -277,35 +302,35 @@ class GridMixin:
         self.starlight_config.mask_dir = text
 
     def _on_browse_mask_file(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Selecionar Arquivo de Máscara STARLIGHT", self.txt_mask_file.text(), "All Files (*);;Starlight Mask (*.mask)")
+        f, _ = QFileDialog.getOpenFileName(self, "Select STARLIGHT Mask File", self.txt_mask_file.text(), "All Files (*);;Starlight Mask (*.mask)")
         if f:
             rel = os.path.basename(f) if os.path.dirname(os.path.abspath(f)) == os.getcwd() else self._to_relpath(f)
             self.txt_mask_file.setText(rel)
             self.starlight_config.mask_file = rel
 
     def _on_browse_config_file(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Selecionar Arquivo de Configuration (.config)", self.txt_config_file.text(), "All Files (*);;Config Files (*.config)")
+        f, _ = QFileDialog.getOpenFileName(self, "Select Configuration File (.config)", self.txt_config_file.text(), "All Files (*);;Config Files (*.config)")
         if f:
             rel = os.path.basename(f)
             self.txt_config_file.setText(rel)
             self.starlight_config.config_file = rel
 
     def _on_browse_base_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "Selecionar Diretório das Populações Base", self.txt_base_dir.text())
+        d = QFileDialog.getExistingDirectory(self, "Select Base Populations Directory", self.txt_base_dir.text())
         if d:
             rel = self._to_relpath(d)
             self.txt_base_dir.setText(rel)
             self.starlight_config.base_dir = rel
 
     def _on_browse_base_file(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Selecionar Arquivo Base Manifest (ex: BasesXSLKrupaPCRR, BaseHRpyPopStarChab)", self.txt_base_file.text(), "All Files (*)")
+        f, _ = QFileDialog.getOpenFileName(self, "Select Base Manifest File (e.g. BasesXSLKrupaPCRR, BaseHRpyPopStarChab)", self.txt_base_file.text(), "All Files (*)")
         if f:
             rel = os.path.basename(f)
             self.txt_base_file.setText(rel)
             self.starlight_config.base_file = rel
 
     def _on_browse_out_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "Selecionar Diretório de Saída dos Resultados", self.txt_out_dir.text())
+        d = QFileDialog.getExistingDirectory(self, "Select Output Directory", self.txt_out_dir.text())
         if d:
             rel = self._to_relpath(d)
             self.txt_out_dir.setText(rel)
@@ -327,6 +352,9 @@ class GridMixin:
         self.starlight_config.llow_sn = self.spin_sn_low.value()
         self.starlight_config.lupp_sn = self.spin_sn_upp.value()
         self.starlight_config.kinematics = self.combo_kinematics.currentText()
+        self.starlight_config.is_err_available = 1 if self.chk_err_spec.isChecked() else 0
+        self.starlight_config.is_flag_available = 1 if self.chk_flag_spec.isChecked() else 0
+        self.starlight_config.seed = self.spin_seed.value()
         self.starlight_config.procs = self.spin_procs.value()
 
 
@@ -452,8 +480,8 @@ class GridMixin:
         if not spec_files:
             QMessageBox.warning(
                 self,
-                "Nenhum Espectro Encontrado",
-                f"Nenhum arquivo de espectro correspondente a '{ext_pattern}' foi encontrado em:\n'{raw_obs}'"
+                "No Spectra Found",
+                f"No spectrum files matching '{ext_pattern}' were found in:\n'{raw_obs}'"
             )
             return
 
@@ -466,18 +494,18 @@ class GridMixin:
 
         try:
             grids = generate_grid_files(spec_files, self.starlight_config)
-            self.txt_log.append(f"✅ Gerado(s) {len(grids)} arquivo(s) de grade para {len(spec_files)} espectro(s) em '{obs_dir}' ({ext_pattern}):")
+            self.txt_log.append(f"✅ Generated {len(grids)} grid file(s) for {len(spec_files)} spectrum(a) in '{obs_dir}' ({ext_pattern}):")
             for g in grids:
                 self.txt_log.append(f"   • {g}")
             for spec in spec_files:
                 self.txt_log.append(f"      - {os.path.basename(spec)}")
             QMessageBox.information(
                 self,
-                "Grades Geradas",
-                f"Sucesso! Foram gerados {len(grids)} arquivo(s) de grade (grid_*.inp) para {len(spec_files)} espectro(s) encontrados em:\n{obs_dir}"
+                "Grids Generated",
+                f"Success! Generated {len(grids)} grid file(s) (grid_*.inp) for {len(spec_files)} spectrum(a) found in:\n{obs_dir}"
             )
         except Exception as e:
-            QMessageBox.critical(self, "Erro na Geração de Grades", str(e))
+            QMessageBox.critical(self, "Grid Generation Error", str(e))
 
 
 
@@ -485,8 +513,8 @@ class GridMixin:
     def _on_run_starlight_clicked(self):
         reply = QMessageBox.question(
             self,
-            "Gerar Grids e Salvar?",
-            "Deseja gerar novos arquivos de Grid e salvar a configuração Global antes de rodar o STARLIGHT?\n(Isso previne que você rode o modelo com configurações velhas).",
+            "Generate Grids & Save Config?",
+            "Do you want to generate fresh Grid files and save the Global configuration before running STARLIGHT?\n(Recommended to avoid running with outdated parameters).",
             QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
             QMessageBox.Yes
         )
@@ -509,14 +537,22 @@ class GridMixin:
         self.worker_thread = StarlightWorkerThread(
             grid_files,
             self.starlight_config.starlight_exe,
-            cwd="."
+            cwd=".",
+            max_workers=self.starlight_config.procs
         )
         self.worker_thread.grid_finished.connect(self._on_grid_finished)
         self.worker_thread.log_message.connect(self.txt_log.append)
         self.worker_thread.all_finished.connect(self._on_all_starlight_finished)
 
         self.btn_run_starlight.setEnabled(False)
+        self.btn_stop_starlight.setEnabled(True)
         self.worker_thread.start()
+
+    def _on_stop_starlight_clicked(self):
+        if hasattr(self, 'worker_thread') and self.worker_thread.isRunning():
+            self.txt_log.append("🛑 Requesting execution cancellation...")
+            self.worker_thread.cancel()
+            self.btn_stop_starlight.setEnabled(False)
 
     def _on_grid_finished(self, result):
         val = self.progress_bar.value() + 1
@@ -524,6 +560,7 @@ class GridMixin:
 
     def _on_all_starlight_finished(self):
         self.btn_run_starlight.setEnabled(True)
+        self.btn_stop_starlight.setEnabled(False)
         self.txt_log.append("STARLIGHT batch completed.")
         self.statusBar().showMessage("STARLIGHT batch finished.")
         QMessageBox.information(self, "Finished", "STARLIGHT run finished! Check Results tab to analyze fits.")

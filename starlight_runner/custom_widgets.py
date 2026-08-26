@@ -401,37 +401,48 @@ class PylightConfigDialog(QDialog):
             QMessageBox.warning(self, "Invalid Format", f"Error parsing input: {str(e)}")
 
 
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
 class StarlightWorkerThread(QThread):
     """
-    Background worker thread for running Starlight grid batch.
+    Background worker thread for running Starlight grid batch in parallel.
     """
     grid_finished = pyqtSignal(dict)
     all_finished = pyqtSignal()
     log_message = pyqtSignal(str)
 
-    def __init__(self, grid_files, starlight_exe, cwd="."):
+    def __init__(self, grid_files, starlight_exe, cwd=".", max_workers=None):
         super().__init__()
         self.grid_files = grid_files
         self.starlight_exe = starlight_exe
         self.cwd = cwd
+        self.max_workers = max_workers or len(grid_files)
         self._is_cancelled = False
+        self._active_processes = []
+        self._lock = threading.Lock()
 
-    def run(self):
-        import subprocess
-        total = len(self.grid_files)
-        self.log_message.emit(f"🚀 Starting STARLIGHT execution on {total} grid file(s)...")
+    def cancel(self):
+        self._is_cancelled = True
+        with self._lock:
+            for p in self._active_processes:
+                try:
+                    p.terminate()
+                except Exception:
+                    pass
 
-        for idx, g in enumerate(self.grid_files, 1):
-            if self._is_cancelled:
-                self.log_message.emit("⚠️ Batch execution cancelled by user.")
-                break
+    def stop(self):
+        self.cancel()
 
-            self.log_message.emit(f"[{idx}/{total}] Running grid: {os.path.basename(g)}...")
-            
-            exe_path = os.path.abspath(os.path.join(self.cwd, self.starlight_exe)) if not os.path.isabs(self.starlight_exe) else self.starlight_exe
-            if not os.path.exists(exe_path):
-                exe_path = self.starlight_exe
+    def _run_single_grid(self, g, exe_path):
+        g_name = os.path.basename(g)
+        if self._is_cancelled:
+            return {"grid": g, "returncode": -1}
 
+        self.log_message.emit(f"🚀 [{g_name}] Starting execution...")
+
+        try:
             with open(g, 'r') as grid_in:
                 process = subprocess.Popen(
                     [exe_path],
@@ -442,24 +453,56 @@ class StarlightWorkerThread(QThread):
                     text=True,
                     bufsize=1
                 )
-                
-                # Stream output line by line
+                with self._lock:
+                    self._active_processes.append(process)
+
                 for line in process.stdout:
                     if self._is_cancelled:
                         process.terminate()
                         break
-                    # Emit line without trailing newline since append() adds one
-                    self.log_message.emit(line.rstrip('\n'))
-                
+                    line_clean = line.rstrip('\r\n')
+                    if line_clean:
+                        self.log_message.emit(f"[{g_name}] {line_clean}")
+
                 process.wait()
-                
+                with self._lock:
+                    if process in self._active_processes:
+                        self._active_processes.remove(process)
+
             res = {"grid": g, "returncode": process.returncode}
-            self.grid_finished.emit(res)
-            
-            if process.returncode == 0:
-                self.log_message.emit(f"✅ Finished: {os.path.basename(g)}\n")
-            else:
-                self.log_message.emit(f"❌ Error in {os.path.basename(g)} (code {process.returncode})\n")
+        except Exception as e:
+            res = {"grid": g, "returncode": -1, "error": str(e)}
+            self.log_message.emit(f"❌ [{g_name}] Exception: {str(e)}")
+
+        self.grid_finished.emit(res)
+        if res.get("returncode") == 0:
+            self.log_message.emit(f"✅ Finished: {g_name}")
+        elif not self._is_cancelled:
+            self.log_message.emit(f"❌ Error in {g_name} (exit code {res.get('returncode')})")
+
+        return res
+
+    def run(self):
+        total = len(self.grid_files)
+        exe_path = os.path.abspath(os.path.join(self.cwd, self.starlight_exe)) if not os.path.isabs(self.starlight_exe) else self.starlight_exe
+        if not os.path.exists(exe_path):
+            exe_path = self.starlight_exe
+
+        workers = max(1, min(self.max_workers, total))
+        self.log_message.emit(f"🚀 Starting PARALLEL STARLIGHT execution on {total} grid(s) with {workers} concurrent worker(s)...")
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = [executor.submit(self._run_single_grid, g, exe_path) for g in self.grid_files]
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception:
+                    pass
+
+        if self._is_cancelled:
+            self.log_message.emit("⚠️ Batch execution cancelled by user.")
+        else:
+            self.log_message.emit("🏁 All parallel grids finished successfully.")
 
         self.all_finished.emit()
 
@@ -564,10 +607,10 @@ class InteractiveMaskDialog(QDialog):
 
         # Instruction banner
         info_banner = QLabel(
-            "<b>Botão Direito (Right-Click)</b>: 1º e 2º clique marca Peso 0.0 (Vermelho)  |  "
-            "<b>Botão do Meio (Middle-Click)</b>: 1º e 2º clique marca Peso 2.0 (Verde)  |  "
-            "<b>Tecla 'd'</b>: Apaga a região sob o cursor  |  "
-            "<b>Tecla 'q' ou 'Esc'</b>: Conclui e fecha a janela"
+            "<b>Right-Click</b>: 1st & 2nd click masks region with Weight 0.0 (Red)  |  "
+            "<b>Middle-Click</b>: 1st & 2nd click masks with Weight 2.0 (Green)  |  "
+            "<b>Key 'd'</b>: Deletes mask region under cursor  |  "
+            "<b>Key 'q' / 'Esc'</b>: Finish & close window"
         )
         info_banner.setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 10px; color: #334155; font-size: 12px;")
         main_layout.addWidget(info_banner)
@@ -855,10 +898,10 @@ class InteractiveCutDialog(QDialog):
         main_layout.addWidget(top_bar)
 
         info_banner = QLabel(
-            "<b>Clique 1 e Clique 2</b>: Seleciona os limites da região a ser cortada  |  "
-            "<b>Botão Direito</b>: Também inicia/termina corte  |  "
-            "<b>Tecla 'd'</b>: Remove o corte sob o cursor  |  "
-            "<b>Tecla 'q' ou 'Esc'</b>: Conclui e fecha a janela"
+            "<b>Click 1 & Click 2</b>: Select boundary points to cut region  |  "
+            "<b>Right-Click</b>: Also starts/completes cut  |  "
+            "<b>Key 'd'</b>: Removes cut region under cursor  |  "
+            "<b>Key 'q' / 'Esc'</b>: Finish & close window"
         )
         info_banner.setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 10px; color: #334155; font-size: 12px;")
         main_layout.addWidget(info_banner)

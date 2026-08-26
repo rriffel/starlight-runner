@@ -17,8 +17,7 @@ from .constants import (
     MUTED, BORDER_COLOR, SUCCESS_COLOR, DANGER_COLOR, STYLESHEET
 )
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from ReadStarlightParameters import starlightPars, popVectors, StSyntesis
+from ..pylight_reader import starlightPars, popVectors, StSyntesis
 from ..custom_widgets import PylightConfigDialog
 
 class ResultsMixin:
@@ -443,31 +442,53 @@ class ResultsMixin:
             QMessageBox.warning(self, "No Fit Loaded", "Please load a .out file first.")
             return
 
+        filename = self.parsed_output.get('filename', 'fit.out') if isinstance(self.parsed_output, dict) else getattr(self.parsed_output, 'filename', 'fit.out')
+        base_name = os.path.splitext(filename)[0]
+
         out_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Figure", f"{os.path.splitext(self.parsed_output.filename)[0]}_fit.png",
-            "PNG Image (*.png);;PDF Document (*.pdf);;SVG Vector (*.svg)"
+            self, "Save Figure", f"{base_name}_fit.png",
+            "PNG Image (*.png);;PDF Document (*.pdf);;SVG Vector (*.svg);;All Files (*)"
         )
         if out_path:
-            self.fig_results.savefig(out_path, dpi=200, bbox_inches='tight')
-            QMessageBox.information(self, "Figure Saved", f"Saved: {out_path}")
+            try:
+                self.fig_results.savefig(out_path, dpi=200, bbox_inches='tight')
+                QMessageBox.information(self, "Figure Saved", f"Saved: {out_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error Saving Figure", f"Failed to save figure:\n{str(e)}")
 
     def _on_export_table(self):
         if self.parsed_output is None:
             QMessageBox.warning(self, "No Fit Loaded", "Please load a .out file first.")
             return
 
+        filename = self.parsed_output.get('filename', 'fit.out') if isinstance(self.parsed_output, dict) else getattr(self.parsed_output, 'filename', 'fit.out')
+        base_name = os.path.splitext(filename)[0]
+
         out_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Parameters Table", f"{os.path.splitext(self.parsed_output.filename)[0]}_summary.csv",
-            "CSV Table (*.csv);;TXT Table (*.txt)"
+            self, "Save Parameters Table", f"{base_name}_summary.csv",
+            "CSV Table (*.csv);;TXT Table (*.txt);;All Files (*)"
         )
         if out_path:
-            import pandas as pd
-            # Make a simple dict out of pars
-            out_d = {'file': self.parsed_output['filename']}
-            for i, p in enumerate(self.parsed_output['ParList']):
-                out_d[p] = self.parsed_output['pars'][i]
-            df = pd.DataFrame([out_d])
-            df.to_csv(out_path, index=False)
-            QMessageBox.information(self, "Table Saved", f"Saved: {out_path}")
+            try:
+                import pandas as pd
+                # Make a simple dict out of pars
+                if isinstance(self.parsed_output, dict):
+                    out_d = {'file': filename}
+                    par_list = self.parsed_output.get('ParList', [])
+                    pars = self.parsed_output.get('pars', [])
+                    for i, p in enumerate(par_list):
+                        if i < len(pars):
+                            out_d[p] = pars[i]
+                    df = pd.DataFrame([out_d])
+                else:
+                    df = pd.DataFrame([{'file': filename}])
+
+                if out_path.endswith('.txt'):
+                    df.to_csv(out_path, sep='\t', index=False)
+                else:
+                    df.to_csv(out_path, index=False)
+                QMessageBox.information(self, "Table Saved", f"Saved: {out_path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error Saving Table", f"Failed to save table:\n{str(e)}")
 
 

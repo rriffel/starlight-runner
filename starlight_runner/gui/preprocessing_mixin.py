@@ -47,7 +47,7 @@ class PreprocessingMixin:
         # 1. File Load Group
         grp_load = QGroupBox("1. Load Spectrum")
         f_load = QVBoxLayout(grp_load)
-        btn_open = QPushButton("Carregar Espectro (.txt, .spec, .fits)")
+        btn_open = QPushButton("Load Spectrum (.txt, .spec, .fits)")
         btn_open.clicked.connect(self._on_load_spectrum_dialog)
         self.lbl_loaded_file = QLabel("No file loaded")
         self.lbl_loaded_file.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
@@ -101,12 +101,12 @@ class PreprocessingMixin:
         left_layout.addWidget(grp_rebin)
 
         # 4. Interactive Telluric & Boundary Cutting
-        grp_cut = QGroupBox("4. Telluric & Extremity Cuts (Interativo)")
+        grp_cut = QGroupBox("4. Telluric & Boundary Cuts (Interactive)")
         f_cut = QVBoxLayout(grp_cut)
         f_cut.setSpacing(10)
 
         # Interactive Mode Toggle Button
-        self.btn_interactive_cut = QPushButton("Modo Interativo: Cortar no Gráfico")
+        self.btn_interactive_cut = QPushButton("Interactive Mode: Cut on Plot")
         self.btn_interactive_cut.setCheckable(True)
         self.btn_interactive_cut.setStyleSheet("""
             QPushButton:checked {
@@ -119,19 +119,19 @@ class PreprocessingMixin:
         self.btn_interactive_cut.clicked.connect(self._on_toggle_interactive_cut)
         f_cut.addWidget(self.btn_interactive_cut)
 
-        btn_detach_cut = QPushButton("Janela Externa de Corte (Tela Cheia)")
+        btn_detach_cut = QPushButton("Detached Cut Window (Full Screen)")
         btn_detach_cut.setStyleSheet("background-color: #4F46E5; color: white; font-weight: bold; padding: 7px; font-size: 12px;")
         btn_detach_cut.clicked.connect(self._on_open_detached_cut_dialog)
         f_cut.addWidget(btn_detach_cut)
 
-        self.lbl_cut_mode_help = QLabel("Dica: Clique no 1º e 2º ponto sobre o espectro para cortar regiões ou extremidades.")
+        self.lbl_cut_mode_help = QLabel("Tip: Click 1st and 2nd points on the spectrum to cut regions or boundaries.")
         self.lbl_cut_mode_help.setWordWrap(True)
         self.lbl_cut_mode_help.setStyleSheet("color: #64748B; font-size: 11px; font-style: italic;")
         f_cut.addWidget(self.lbl_cut_mode_help)
 
         # Preset & Clear buttons row
         btn_row = QHBoxLayout()
-        btn_nir_tel_preset = QPushButton("Preset Telúricas NIR")
+        btn_nir_tel_preset = QPushButton("NIR Tellurics Preset")
         btn_nir_tel_preset.clicked.connect(self._apply_nir_telluric_preset)
         btn_clear_cuts = QPushButton("Clear Cuts")
         btn_clear_cuts.setStyleSheet("background-color: #EF4444; color: white;")
@@ -150,7 +150,7 @@ class PreprocessingMixin:
         self.spin_cut_upp.setRange(0.0, 100000.0)
         self.spin_cut_upp.setDecimals(1)
         self.spin_cut_upp.setValue(14200.0)
-        btn_add_cut = QPushButton("+ Adicionar")
+        btn_add_cut = QPushButton("+ Add Interval")
         btn_add_cut.clicked.connect(self._add_manual_cut)
         manual_row.addWidget(QLabel("λ:"))
         manual_row.addWidget(self.spin_cut_low)
@@ -161,18 +161,18 @@ class PreprocessingMixin:
 
         # Cuts Table
         self.tbl_cuts = QTableWidget(0, 2)
-        self.tbl_cuts.setHorizontalHeaderLabels(["Início (Å)", "Fim (Å)"])
+        self.tbl_cuts.setHorizontalHeaderLabels(["Start (Å)", "End (Å)"])
         self.tbl_cuts.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tbl_cuts.setMinimumHeight(120)
         f_cut.addWidget(self.tbl_cuts)
 
-        btn_del_cut = QPushButton("Remover Corte Selecionado")
+        btn_del_cut = QPushButton("Remove Selected Cut")
         btn_del_cut.clicked.connect(self._remove_selected_cut)
         f_cut.addWidget(btn_del_cut)
 
         # Global Boundary Trimming
-        self.chk_trim_bounds = QCheckBox("Cortar Extremos Globais do Espectro")
-        self.chk_trim_bounds.toggled.connect(self._plot_preprocessing)
+        self.chk_trim_bounds = QCheckBox("Trim Global Extremities of Spectrum")
+        self.chk_trim_bounds.toggled.connect(self._on_preproc_param_changed)
         f_cut.addWidget(self.chk_trim_bounds)
 
         bounds_row = QHBoxLayout()
@@ -190,17 +190,26 @@ class PreprocessingMixin:
 
         left_layout.addWidget(grp_cut)
 
+        # Connect parameter live-updates
+        self.spin_z.valueChanged.connect(self._on_preproc_param_changed)
+        self.combo_law.currentIndexChanged.connect(self._on_preproc_param_changed)
+        self.spin_av.valueChanged.connect(self._on_preproc_param_changed)
+        self.spin_rv.valueChanged.connect(self._on_preproc_param_changed)
+        self.spin_rebin_step.valueChanged.connect(self._on_preproc_param_changed)
+        self.spin_trim_min.valueChanged.connect(self._on_preproc_param_changed)
+        self.spin_trim_max.valueChanged.connect(self._on_preproc_param_changed)
+
         # Action Buttons
-        btn_apply_preprocess = QPushButton("Executar Pré-processamento")
+        btn_apply_preprocess = QPushButton("Run Preprocessing")
         btn_apply_preprocess.setStyleSheet("background-color: #2563EB; color: white; font-size: 14px; padding: 10px;")
         btn_apply_preprocess.clicked.connect(self._on_run_preprocessing)
         left_layout.addWidget(btn_apply_preprocess)
 
-        btn_export_spec = QPushButton("Salvar Espectro (.spec)")
+        btn_export_spec = QPushButton("Save Spectrum (.spec)")
         btn_export_spec.clicked.connect(self._on_export_spec_dialog)
         left_layout.addWidget(btn_export_spec)
 
-        btn_next_step2 = QPushButton("Avançar para Etapa 2 (Spectral Masking)  ➔")
+        btn_next_step2 = QPushButton("Advance to Step 2 (Spectral Masking)  ➔")
         btn_next_step2.setStyleSheet("background-color: #10B981; color: white; font-weight: bold; padding: 9px; font-size: 13px;")
         btn_next_step2.clicked.connect(self._on_advance_to_step2)
         left_layout.addWidget(btn_next_step2)
@@ -249,11 +258,11 @@ class PreprocessingMixin:
                 self.toolbar_preproc.zoom()
             elif self.toolbar_preproc.mode == 'pan/zoom':
                 self.toolbar_preproc.pan()
-            self.btn_interactive_cut.setText("🟢 Modo Interativo Ativo (Clique no Gráfico)")
-            self.statusBar().showMessage("Modo Interativo ATIVADO: Clique no 1º e no 2º extremo da região para cortar (ou use botão direito).")
+            self.btn_interactive_cut.setText("🟢 Interactive Cut Mode ACTIVE")
+            self.statusBar().showMessage("Interactive Mode ACTIVATED: Click 1st and 2nd endpoints on the spectrum to cut (or right-click).")
         else:
-            self.btn_interactive_cut.setText("✂️ Modo Interativo: Cortar no Gráfico")
-            self.statusBar().showMessage("Modo Interativo Desativado.")
+            self.btn_interactive_cut.setText("✂️ Interactive Mode: Cut on Plot")
+            self.statusBar().showMessage("Interactive Mode Deactivated.")
         self._plot_preprocessing()
 
     def _on_preproc_canvas_click(self, event):
@@ -278,7 +287,7 @@ class PreprocessingMixin:
             # 1st Click: record starting extremity
             self.preproc_click_pt = clicked_x
             self.statusBar().showMessage(
-                f"📍 1º Extremo selecionado em {clicked_x:.1f} Å. Clique no 2º extremo para completar o corte (ou 'Esc' para cancelar)."
+                f"📍 1st Endpoint selected at {clicked_x:.1f} Å. Click 2nd endpoint to complete cut (or 'Esc' to cancel)."
             )
             self._plot_preprocessing()
         else:
@@ -289,20 +298,21 @@ class PreprocessingMixin:
             if (p2 - p1) > 1.0:
                 self.telluric_cuts.append({"low": p1, "upp": p2, "name": "Telluric cut"})
                 self.statusBar().showMessage(
-                    f"✅ Corte adicionado: {p1:.1f} - {p2:.1f} Å. Clique novamente para iniciar outro corte."
+                    f"✅ Cut region added: {p1:.1f} - {p2:.1f} Å. Click again to start another cut."
                 )
             else:
-                self.statusBar().showMessage("⚠️ Intervalo muito pequeno (menor que 1 Å). Cancelado.")
+                self.statusBar().showMessage("⚠️ Interval too small (less than 1 Å). Cancelled.")
 
             self.preproc_click_pt = None
             self._update_cuts_table()
+            self._run_preprocessing_internal(silent=True)
             self._plot_preprocessing()
 
     def _on_preproc_key_press(self, event):
         if event.key == 'escape':
             self.preproc_click_pt = None
             self._plot_preprocessing()
-            self.statusBar().showMessage("Seleção de corte cancelada.")
+            self.statusBar().showMessage("Cut selection cancelled.")
         elif event.key == 'd' and event.xdata is not None:
             # Delete any cut region under mouse
             x = float(event.xdata)
@@ -311,9 +321,15 @@ class PreprocessingMixin:
                 for idx in reversed(to_remove):
                     del self.telluric_cuts[idx]
                 self._update_cuts_table()
+                self._run_preprocessing_internal(silent=True)
                 self._plot_preprocessing()
                 self.statusBar().showMessage(f"🗑️ Cut removed at {x:.1f} Å.")
 
+
+    def _on_preproc_param_changed(self):
+        if self.raw_wl is not None:
+            self._run_preprocessing_internal(silent=True)
+            self._plot_preprocessing()
 
     def _apply_nir_telluric_preset(self):
         # Standard NIR telluric absorption bands
@@ -325,24 +341,27 @@ class PreprocessingMixin:
             if not any(abs(c["low"] - low) < 50 and abs(c["upp"] - upp) < 50 for c in self.telluric_cuts):
                 self.telluric_cuts.append({"low": low, "upp": upp, "name": "NIR Telluric gap"})
         self._update_cuts_table()
+        self._run_preprocessing_internal(silent=True)
         self._plot_preprocessing()
-        self.statusBar().showMessage("Presets de bandas telúricas NIR carregados.")
+        self.statusBar().showMessage("NIR telluric band presets loaded.")
 
     def _clear_all_cuts(self):
         self.telluric_cuts.clear()
         self.preproc_click_pt = None
         self._update_cuts_table()
+        self._run_preprocessing_internal(silent=True)
         self._plot_preprocessing()
-        self.statusBar().showMessage("Todos os cortes foram removidos.")
+        self.statusBar().showMessage("All cut regions removed.")
 
     def _add_manual_cut(self):
         low = self.spin_cut_low.value()
         upp = self.spin_cut_upp.value()
         if low >= upp:
-            QMessageBox.warning(self, "Intervalo Inválido", "O início deve ser menor que o fim.")
+            QMessageBox.warning(self, "Invalid Interval", "Start wavelength must be less than end wavelength.")
             return
         self.telluric_cuts.append({"low": low, "upp": upp, "name": "Telluric cut"})
         self._update_cuts_table()
+        self._run_preprocessing_internal(silent=True)
         self._plot_preprocessing()
 
     def _remove_selected_cut(self):
@@ -350,6 +369,7 @@ class PreprocessingMixin:
         if 0 <= row < len(self.telluric_cuts):
             self.telluric_cuts.pop(row)
             self._update_cuts_table()
+            self._run_preprocessing_internal(silent=True)
             self._plot_preprocessing()
 
     def _update_cuts_table(self):
@@ -374,20 +394,25 @@ class PreprocessingMixin:
             self.current_spectrum_path = filepath
             self.lbl_loaded_file.setText(os.path.basename(filepath))
 
-            # Set default trim bounds
+            # Set default trim bounds without triggering cascading events
             if len(wl_c) > 0:
+                self.spin_trim_min.blockSignals(True)
+                self.spin_trim_max.blockSignals(True)
                 self.spin_trim_min.setValue(wl_c[0])
                 self.spin_trim_max.setValue(wl_c[-1])
+                self.spin_trim_min.blockSignals(False)
+                self.spin_trim_max.blockSignals(False)
 
-            self.statusBar().showMessage(f"Loaded: {os.path.basename(filepath)} ({len(wl_c)} points)")
+            self._run_preprocessing_internal(silent=True)
+            pts_reb = len(self.proc_wl) if self.proc_wl is not None else 0
+            self.statusBar().showMessage(f"Loaded: {os.path.basename(filepath)} ({len(wl_c)} raw points, {pts_reb} rebinned points)")
             self._plot_preprocessing()
         except Exception as e:
             QMessageBox.critical(self, "Error Loading Spectrum", str(e))
 
-    def _on_run_preprocessing(self):
+    def _run_preprocessing_internal(self, silent=True):
         if self.raw_wl is None:
-            QMessageBox.warning(self, "No Spectrum Loaded", "Please load a spectrum first.")
-            return
+            return False
 
         try:
             z = self.spin_z.value()
@@ -417,7 +442,9 @@ class PreprocessingMixin:
                     )
 
             if len(wl_curr) < 3:
-                raise ValueError("Restaram poucos pontos válidos após aplicar os cortes. Revise os limites.")
+                if not silent:
+                    raise ValueError("Too few valid data points remaining after cuts. Please adjust boundary limits.")
+                return False
 
             # 4. Rebinning
             wl_reb, flx_reb, eflx_reb = rebin_spectrum(
@@ -432,8 +459,22 @@ class PreprocessingMixin:
                 )
 
             self.proc_wl, self.proc_flux, self.proc_eflux = wl_reb, flx_reb, eflx_reb
-            self._plot_preprocessing()
-            self.statusBar().showMessage(f"Pré-processamento concluído com sucesso ({len(wl_reb)} pontos).")
+            return True
+        except Exception as e:
+            if not silent:
+                raise e
+            return False
+
+    def _on_run_preprocessing(self):
+        if self.raw_wl is None:
+            QMessageBox.warning(self, "No Spectrum Loaded", "Please load a spectrum first.")
+            return
+
+        try:
+            ok = self._run_preprocessing_internal(silent=False)
+            if ok and self.proc_wl is not None:
+                self._plot_preprocessing()
+                self.statusBar().showMessage(f"Preprocessing completed successfully ({len(self.proc_wl)} points, Δλ={self.spin_rebin_step.value():.2f} Å).")
         except Exception as e:
             QMessageBox.critical(self, "Preprocessing Error", str(e))
 
@@ -459,7 +500,7 @@ class PreprocessingMixin:
 
         # Highlight Telluric / Cut Regions in Red with Hatching
         for idx, cut in enumerate(self.telluric_cuts):
-            lbl = "Cut Region (Telurica)" if idx == 0 else ""
+            lbl = "Cut Region (Telluric)" if idx == 0 else ""
             ax.axvspan(cut["low"], cut["upp"], color="#EF4444", alpha=0.32, hatch="//", label=lbl)
 
         # Highlight single click guide if user clicked 1st point
@@ -493,13 +534,20 @@ class PreprocessingMixin:
 
 
     def _on_advance_to_step2(self):
-        wl = self.proc_wl if self.proc_wl is not None else self.raw_wl
-        flx = self.proc_flux if self.proc_flux is not None else self.raw_flux
+        if self.raw_wl is None and self.proc_wl is None:
+            self.set_active_page(1)
+            return
+
+        if self.proc_wl is None:
+            self._run_preprocessing_internal(silent=True)
+
+        wl = self.proc_wl
+        flx = self.proc_flux
         if wl is not None and flx is not None:
             reply = QMessageBox.question(
                 self,
-                "Salvar Espectro Processado",
-                "Deseja salvar o espectro (.spec) pré-processado antes de avançar para a Etapa 2?",
+                "Save Processed Spectrum",
+                "Do you want to save the preprocessed & rebinned spectrum (.spec) before advancing to Step 2?",
                 QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
                 QMessageBox.Yes
             )
@@ -514,21 +562,31 @@ class PreprocessingMixin:
             self.set_active_page(1)
 
     def _on_export_spec_dialog(self, auto_advance=True):
-        wl = self.proc_wl if self.proc_wl is not None else self.raw_wl
-        flx = self.proc_flux if self.proc_flux is not None else self.raw_flux
-        eflx = self.proc_eflux if self.proc_eflux is not None else self.raw_eflux
+        if self.raw_wl is None and self.proc_wl is None:
+            QMessageBox.warning(self, "No Data", "No spectrum data loaded to export.")
+            return False
+
+        if self.proc_wl is None:
+            self._run_preprocessing_internal(silent=True)
+
+        wl = self.proc_wl
+        flx = self.proc_flux
+        eflx = self.proc_eflux
 
         if wl is None or flx is None:
-            QMessageBox.warning(self, "Sem Dados", "Nenhum dado de espectro para exportar.")
+            QMessageBox.warning(self, "No Data", "Failed to process spectrum for export.")
             return False
 
         default_name = "spectrum_clean.spec"
         if self.current_spectrum_path:
             base = os.path.splitext(os.path.basename(self.current_spectrum_path))[0]
-            default_name = f"{base}_clean.spec"
+            if base.endswith("_clean"):
+                default_name = f"{base}.spec"
+            else:
+                default_name = f"{base}_clean.spec"
 
         out_path, _ = QFileDialog.getSaveFileName(
-            self, "Salvar Arquivo STARLIGHT .spec", default_name, "STARLIGHT Spec (*.spec);;All Files (*)"
+            self, "Save STARLIGHT Spec File", default_name, "STARLIGHT Spec (*.spec);;All Files (*)"
         )
         if out_path:
             save_spec_file(out_path, wl, flx, eflx)
@@ -539,17 +597,17 @@ class PreprocessingMixin:
             if auto_advance:
                 reply = QMessageBox.question(
                     self,
-                    "Espectro Salvo",
-                    f"Espectro salvo com sucesso em:\n{out_path}\n\nDeseja avançar para a Etapa ② (Spectral Masking) com este espectro?",
+                    "Spectrum Saved",
+                    f"Spectrum saved successfully to:\n{out_path}\n({len(wl)} points, Δλ={self.spin_rebin_step.value():.2f} Å)\n\nDo you want to advance to Step ② (Spectral Masking) with this spectrum?",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.Yes
                 )
                 if reply == QMessageBox.Yes:
                     self.set_active_page(1)
                 else:
-                    self.statusBar().showMessage(f"Salvo: {out_path}")
+                    self.statusBar().showMessage(f"Saved: {out_path}")
             else:
-                self.statusBar().showMessage(f"Salvo: {out_path}")
+                self.statusBar().showMessage(f"Saved: {out_path}")
             return True
         return False
 
@@ -559,12 +617,13 @@ class PreprocessingMixin:
         eflx = self.raw_eflux
 
         if wl is None or flx is None:
-            QMessageBox.warning(self, "Sem Espectro", "Por favor, carregue um espectro primeiro na Etapa 1.")
+            QMessageBox.warning(self, "No Spectrum", "Please load a spectrum in Step 1 first.")
             return
 
         dlg = InteractiveCutDialog(self, wl, flx, eflx, self.telluric_cuts)
         if dlg.exec_() == QDialog.Accepted:
             self.telluric_cuts = dlg.telluric_cuts
             self._update_cuts_table()
+            self._run_preprocessing_internal(silent=True)
             self._plot_preprocessing()
-            self.statusBar().showMessage(f"Cortes atualizados ({len(self.telluric_cuts)} regiões cortadas).")
+            self.statusBar().showMessage(f"Cuts updated ({len(self.telluric_cuts)} regions cut).")

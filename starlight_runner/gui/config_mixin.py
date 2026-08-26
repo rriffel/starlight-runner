@@ -44,12 +44,18 @@ class ConfigMixin:
                     "sn_upp": self.spin_sn_upp.value(),
                     "kinematics": self.combo_kinematics.currentText(),
                     "procs": self.spin_procs.value(),
+                    "is_err_available": 1 if self.chk_err_spec.isChecked() else 0,
+                    "is_flag_available": 1 if self.chk_flag_spec.isChecked() else 0,
+                    "seed": self.spin_seed.value(),
                     "z": self.spin_z.value(),
                     "law": self.combo_law.currentText(),
                     "av": self.spin_av.value(),
                     "rv": self.spin_rv.value(),
                     "rebin_step": self.spin_rebin_step.value(),
-                    "cuts": getattr(self, 'cuts', []),
+                    "telluric_cuts": getattr(self, 'telluric_cuts', []),
+                    "trim_bounds_enabled": self.chk_trim_bounds.isChecked(),
+                    "trim_min": self.spin_trim_min.value(),
+                    "trim_max": self.spin_trim_max.value(),
                     "masks": getattr(self.spectral_mask, 'intervals', []),
                     "pylight_config": getattr(self, 'pylight_config', {})
                 }
@@ -85,6 +91,9 @@ class ConfigMixin:
                 if "sn_upp" in state: self.spin_sn_upp.setValue(state["sn_upp"])
                 if "kinematics" in state: self.combo_kinematics.setCurrentText(state["kinematics"])
                 if "procs" in state: self.spin_procs.setValue(state["procs"])
+                if "is_err_available" in state: self.chk_err_spec.setChecked(bool(state["is_err_available"]))
+                if "is_flag_available" in state: self.chk_flag_spec.setChecked(bool(state["is_flag_available"]))
+                if "seed" in state: self.spin_seed.setValue(state["seed"])
                 
                 if "z" in state: self.spin_z.setValue(state["z"])
                 if "law" in state: self.combo_law.setCurrentText(state["law"])
@@ -92,10 +101,20 @@ class ConfigMixin:
                 if "rv" in state: self.spin_rv.setValue(state["rv"])
                 if "rebin_step" in state: self.spin_rebin_step.setValue(state["rebin_step"])
                 
-                if "cuts" in state:
-                    self.cuts = state["cuts"]
+                # Restore telluric cuts (backward compat: fall back to "cuts" key)
+                saved_cuts = state.get("telluric_cuts", state.get("cuts", []))
+                if saved_cuts:
+                    self.telluric_cuts = saved_cuts
                     if hasattr(self, '_update_cuts_table'): self._update_cuts_table()
                     if hasattr(self, '_plot_preprocessing'): self._plot_preprocessing()
+
+                # Restore spectrum edge trimming bounds
+                if "trim_bounds_enabled" in state:
+                    self.chk_trim_bounds.setChecked(state["trim_bounds_enabled"])
+                if "trim_min" in state:
+                    self.spin_trim_min.setValue(state["trim_min"])
+                if "trim_max" in state:
+                    self.spin_trim_max.setValue(state["trim_max"])
                     
                 if "masks" in state:
                     self.spectral_mask.intervals = state["masks"]

@@ -201,6 +201,23 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
         return sidebar
 
     def set_active_page(self, index):
+        prev_index = self.pages.currentIndex()
+
+        # Prompt to save mask when leaving Step 2 (Masking) towards Step 3 (Grid)
+        if prev_index == 1 and index == 2 and self.spectral_mask.intervals:
+            reply = QMessageBox.question(
+                self,
+                "Save Spectral Mask",
+                "Do you want to save the spectral mask (.mask) before\n"
+                "proceeding to the STARLIGHT Grid step?",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                self._on_save_sm_dialog()
+            elif reply == QMessageBox.Cancel:
+                return  # abort navigation
+
         self.pages.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):
             btn.setProperty("active", "true" if i == index else "false")
@@ -213,7 +230,7 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
                 if self.current_spectrum_path:
                     self.lbl_mask_loaded_file.setText(os.path.basename(self.current_spectrum_path))
                 elif self.proc_wl is not None or self.raw_wl is not None:
-                    self.lbl_mask_loaded_file.setText("Espectro ativo na memória")
+                    self.lbl_mask_loaded_file.setText("Active spectrum in memory")
             self._plot_masking()
         elif index == 2:
             # Sync Step 3 (Runner) observation directory if available

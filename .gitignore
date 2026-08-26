@@ -43,3 +43,8 @@ Thumbs.db
 
 # Temporary execution files
 *.temp
+grid_*.inp
+starlight_gui_config*.json
+
+# Backup directory
+backup/

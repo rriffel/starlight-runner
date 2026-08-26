@@ -1,4 +1,4 @@
-111     [N_base]
+110     [N_base]
 XSL_SSP_logT7.7_MH-0.6_Kroupa_PC.spec      5.01187e+07      0.00382      logT7.7_MHm0.6_Kpc      0.7935            0     0.0000
 XSL_SSP_logT7.8_MH-0.6_Kroupa_PC.spec      6.30957e+07      0.00382      logT7.8_MHm0.6_Kpc      0.7780            0     0.0000
 XSL_SSP_logT7.9_MH-0.6_Kroupa_PC.spec      7.94328e+07      0.00382      logT7.9_MHm0.6_Kpc      0.7659            0     0.0000
@@ -99,16 +99,16 @@ XSL_SSP_logT9.8_MH0.2_Kroupa_PC.spec      6.30957e+09      0.02409      logT9.8_
 XSL_SSP_logT9.9_MH0.2_Kroupa_PC.spec      7.94328e+09      0.02409      logT9.9_MH0.2_Kpc      0.5036            0     0.0000
 XSL_SSP_logT10.0_MH0.2_Kroupa_PC.spec      1.00000e+10      0.02409      logT10.0_MH0.2_Kpc      0.4896            0     0.0000
 XSL_SSP_logT10.1_MH0.2_Kroupa_PC.spec      1.25893e+10      0.02409      logT10.1_MH0.2_Kpc      0.4750            0     0.0000
-BB_700.dat                                 1.00             0.0000        BB_700                1.0              0     0.0000
-BB_800.dat                                 1.00             0.0000        BB_800                1.0              0     0.0000
-BB_900.dat                                 1.00             0.0000        BB_900                1.0              0     0.0000
-BB_1000.dat                                1.00             0.0000        BB_1000               1.0              0     0.0000
-BB_1100.dat                                1.00             0.0000        BB_1100               1.0              0     0.0000
-BB_1200.dat                                1.00             0.0000        BB_1200               1.0              0     0.0000
-BB_1300.dat                                1.00             0.0000        BB_1300               1.0              0     0.0000
-BB_1400.dat                                1.00             0.0000        BB_1400               1.0              0     0.0000
-Power_125.dat                              1.00             0.0000        Power_125             1.0              0     0.0000
-Power_150.dat                              1.00             0.0000        Power_150             1.0              0     0.0000
-Power_175.dat                              1.00             0.0000        Power_175             1.0              0     0.0000
+BB_800.dat                                 1.00             0.0000        agn_bb_800             1.0       0     0.0000
+BB_900.dat                                 1.00             0.0000        agn_bb_900             1.0       0     0.0000
+BB_1000.dat                                1.00             0.0000        agn_bb_1000            1.0       0     0.0000
+BB_1100.dat                                1.00             0.0000        agn_bb_1100            1.0       0     0.0000
+BB_1200.dat                                1.00             0.0000        agn_bb_1200            1.0       0     0.0000
+BB_1300.dat                                1.00             0.0000        agn_bb_1300            1.0       0     0.0000
+BB_1400.dat                                1.00             0.0000        agn_bb_1400            1.0       0     0.0000
+Power_125.dat                              1.00             0.0000        agn_fc_0.25            1.0     0  0.0000
+Power_150.dat                              1.00             0.0000        agn_fc_0.5             1.0     0  0.0000
+Power_175.dat                              1.00             0.0000        agn_fc_0.75            1.0     0  0.0000
 # spec-file                                 age [yr]            Z           code                Mstar           YAV?     a/Fe
+ 
  

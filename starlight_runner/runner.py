@@ -80,7 +80,7 @@ class StarlightConfig:
         self.out_dir = kwargs.get("out_dir", "./synt/")
 
         self.config_file = kwargs.get("config_file", "StCv04.C99.config")
-        self.base_file = kwargs.get("base_file", "BaseHRpyPopStarChab")
+        self.base_file = kwargs.get("base_file", "BasesFile")
         self.reddening_law = kwargs.get("reddening_law", "CCM")
         self.velocity_shift = kwargs.get("velocity_shift", 0.0)
         self.velocity_disp = kwargs.get("velocity_disp", 150.0)

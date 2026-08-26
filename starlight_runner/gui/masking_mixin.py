@@ -29,7 +29,7 @@ class MaskingMixin:
         eflx = self.proc_eflux if self.proc_eflux is not None else self.raw_eflux
 
         if wl is None or flx is None:
-            QMessageBox.warning(self, "Sem Espectro", "Por favor, carregue ou pré-processe um espectro primeiro.")
+            QMessageBox.warning(self, "No Spectrum", "Please load or preprocess a spectrum first.")
             return
 
         spec_path = getattr(self, 'current_spectrum_path', None)
@@ -65,7 +65,7 @@ class MaskingMixin:
                 except Exception as e:
                     self.statusBar().showMessage(f"Masking done ({len(self.spectral_mask.intervals)} intervals).")
             else:
-                self.statusBar().showMessage(f"Edição de máscaras concluída ({len(self.spectral_mask.intervals)} intervalos).")
+                self.statusBar().showMessage(f"Mask editing finished ({len(self.spectral_mask.intervals)} intervals).")
 
 
 
@@ -90,7 +90,7 @@ class MaskingMixin:
         # 0. Target Spectrum Group
         grp_spec = QGroupBox("0. Target Spectrum")
         f_spec = QVBoxLayout(grp_spec)
-        btn_load_spec_mask = QPushButton("Carregar Espectro (.spec, .txt, .fits)")
+        btn_load_spec_mask = QPushButton("Load Spectrum (.spec, .txt, .fits)")
         btn_load_spec_mask.clicked.connect(self._on_load_spectrum_for_masking_dialog)
         self.lbl_mask_loaded_file = QLabel("No spectrum loaded (or use from Step 1)")
         self.lbl_mask_loaded_file.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
@@ -112,11 +112,11 @@ class MaskingMixin:
         left_layout.addWidget(grp_mdir)
 
         # 1. Interactive Masking (CreateMasks Mode)
-        grp_interactive = QGroupBox("2. Modo Interativo (CreateMasks)")
+        grp_interactive = QGroupBox("2. Interactive Masking (CreateMasks Mode)")
         f_inter = QVBoxLayout(grp_interactive)
         f_inter.setSpacing(8)
 
-        self.btn_mask_interactive = QPushButton("Modo Interativo: Mascarar no Gráfico")
+        self.btn_mask_interactive = QPushButton("Interactive Mode: Mask on Plot")
         self.btn_mask_interactive.setCheckable(True)
         self.btn_mask_interactive.setStyleSheet("""
             QPushButton:checked {
@@ -129,27 +129,27 @@ class MaskingMixin:
         self.btn_mask_interactive.clicked.connect(self._on_toggle_mask_interactive)
         f_inter.addWidget(self.btn_mask_interactive)
 
-        btn_detach_mask = QPushButton("Janela Externa de Máscara (CreateMasks)")
+        btn_detach_mask = QPushButton("Detached Mask Window (Full Screen)")
         btn_detach_mask.setStyleSheet("background-color: #4F46E5; color: white; font-weight: bold; padding: 8px; font-size: 13px;")
         btn_detach_mask.clicked.connect(self._on_open_detached_mask_dialog)
         f_inter.addWidget(btn_detach_mask)
 
         # Weight selection for Left-Click
         weight_row = QHBoxLayout()
-        weight_row.addWidget(QLabel("Peso do Clique:"))
-        self.rb_weight_0 = QRadioButton("🔴 Peso 0.0 (Exclude)")
+        weight_row.addWidget(QLabel("Click Weight:"))
+        self.rb_weight_0 = QRadioButton("🔴 Weight 0.0 (Exclude)")
         self.rb_weight_0.setChecked(True)
-        self.rb_weight_2 = QRadioButton("🟢 Peso 2.0 (Emphasize)")
+        self.rb_weight_2 = QRadioButton("🟢 Weight 2.0 (Emphasize)")
         weight_row.addWidget(self.rb_weight_0)
         weight_row.addWidget(self.rb_weight_2)
         f_inter.addLayout(weight_row)
 
         lbl_mask_help = QLabel(
-            "<b>Botão Direito (Right-Click)</b>: 1º e 2º clique marca Peso 0.0 (Vermelho)<br>"
-            "<b>Botão do Meio (Middle-Click)</b>: 1º e 2º clique marca Peso 2.0 (Verde)<br>"
-            "<b>Botão Esquerdo</b>: Zoom/Pan (ou Máscara quando Modo Interativo estiver ativo)<br>"
-            "<b>Tecla 'd'</b>: Remova uma máscara passando o mouse sobre ela e teclando 'd'<br>"
-            "<b>Tecla 'Esc'</b>: Cancela a seleção do 1º ponto"
+            "<b>Right-Click</b>: 1st and 2nd click masks region with Weight 0.0 (Red)<br>"
+            "<b>Middle-Click</b>: 1st and 2nd click masks region with Weight 2.0 (Green)<br>"
+            "<b>Left-Click</b>: Zoom/Pan (or Mask when Interactive Mode is active)<br>"
+            "<b>Key 'd'</b>: Hover over a mask region and press 'd' to delete it<br>"
+            "<b>Key 'Esc'</b>: Cancels 1st point selection"
         )
         lbl_mask_help.setWordWrap(True)
         lbl_mask_help.setStyleSheet("color: #475569; font-size: 11px; line-height: 1.3; background: #F1F5F9; padding: 6px; border-radius: 4px;")
@@ -160,15 +160,15 @@ class MaskingMixin:
         grp_presets = QGroupBox("3. Mask Presets")
         f_pre = QVBoxLayout(grp_presets)
 
-        btn_opt_preset = QPushButton("Carregar Preset Óptico (CreateMasks)")
+        btn_opt_preset = QPushButton("Load Optical Preset (CreateMasks)")
         btn_opt_preset.clicked.connect(lambda: self._apply_mask_preset("optical"))
         f_pre.addWidget(btn_opt_preset)
 
-        btn_nir_preset = QPushButton("Carregar Preset NIR")
+        btn_nir_preset = QPushButton("Load NIR Preset")
         btn_nir_preset.clicked.connect(lambda: self._apply_mask_preset("nir"))
         f_pre.addWidget(btn_nir_preset)
 
-        btn_clear_masks = QPushButton("Limpar Todas as Máscaras")
+        btn_clear_masks = QPushButton("Clear All Masks")
         btn_clear_masks.setStyleSheet("background-color: #EF4444; color: white;")
         btn_clear_masks.clicked.connect(self._clear_all_masks)
         f_pre.addWidget(btn_clear_masks)
@@ -176,7 +176,7 @@ class MaskingMixin:
         left_layout.addWidget(grp_presets)
 
         # 3. Manual Interval Group
-        grp_add = QGroupBox("4. Add Mask Region Manualmente")
+        grp_add = QGroupBox("4. Add Mask Region Manually")
         f_add = QFormLayout(grp_add)
         self.spin_mask_low = QDoubleSpinBox()
         self.spin_mask_low.setRange(0.0, 50000.0)
@@ -197,7 +197,7 @@ class MaskingMixin:
         self.txt_mask_name.setPlaceholderText("e.g. Halpha emission")
         f_add.addRow("Label:", self.txt_mask_name)
 
-        btn_add_interval = QPushButton("+ Adicionar Região")
+        btn_add_interval = QPushButton("+ Add Region")
         btn_add_interval.clicked.connect(self._on_add_mask_interval)
         f_add.addRow(btn_add_interval)
         left_layout.addWidget(grp_add)
@@ -209,21 +209,21 @@ class MaskingMixin:
         self.tbl_masks.setMinimumHeight(130)
         left_layout.addWidget(self.tbl_masks, 1)
 
-        btn_del_mask = QPushButton("Remover Região Selecionada")
+        btn_del_mask = QPushButton("Remove Selected Region")
         btn_del_mask.clicked.connect(self._remove_selected_mask)
         left_layout.addWidget(btn_del_mask)
 
         # I/O Buttons
         io_row = QHBoxLayout()
-        btn_load_sm = QPushButton("Abrir Máscara (.mask)")
+        btn_load_sm = QPushButton("Open Mask (.mask)")
         btn_load_sm.clicked.connect(self._on_open_sm_dialog)
-        btn_save_sm = QPushButton("Salvar Máscara (.mask)")
+        btn_save_sm = QPushButton("Save Mask (.mask)")
         btn_save_sm.clicked.connect(self._on_save_sm_dialog)
         io_row.addWidget(btn_load_sm)
         io_row.addWidget(btn_save_sm)
         left_layout.addLayout(io_row)
 
-        btn_next_step3 = QPushButton("Avançar para Etapa 3 (STARLIGHT Grid)  ➔")
+        btn_next_step3 = QPushButton("Advance to Step 3 (STARLIGHT Grid)  ➔")
         btn_next_step3.setStyleSheet("background-color: #10B981; color: white; font-weight: bold; padding: 9px; font-size: 13px;")
         btn_next_step3.clicked.connect(lambda: self.set_active_page(2))
         left_layout.addWidget(btn_next_step3)
@@ -271,11 +271,11 @@ class MaskingMixin:
         if checked:
             if self.toolbar_mask.mode != '':
                 self.toolbar_mask.zoom()  # toggle off zoom mode
-            self.btn_mask_interactive.setText("🟢 Modo Interativo de Máscara ATIVO")
-            self.statusBar().showMessage("Modo Interativo de Máscara Ativo: Clique no 1º e 2º ponto sobre o espectro para mascarar.")
+            self.btn_mask_interactive.setText("🟢 Interactive Mask Mode ACTIVE")
+            self.statusBar().showMessage("Interactive Mask Mode Active: Click 1st and 2nd endpoints on the spectrum to mask.")
         else:
-            self.btn_mask_interactive.setText("✂️ Modo Interativo: Mascarar no Gráfico")
-            self.statusBar().showMessage("Modo Interativo de Máscara Desativado.")
+            self.btn_mask_interactive.setText("✂️ Interactive Mode: Mask on Plot")
+            self.statusBar().showMessage("Interactive Mask Mode Deactivated.")
         self._plot_masking()
 
     def _on_mask_canvas_click(self, event):
@@ -307,7 +307,7 @@ class MaskingMixin:
             self.mask_click_pt = clicked_x
             self.mask_click_weight = weight
             w_txt = "0.0 (Exclude)" if weight == 0.0 else "2.0 (Emphasize)"
-            self.statusBar().showMessage(f"📍 1º ponto em {clicked_x:.1f} Å. Clique no 2º ponto para aplicar máscara com peso {w_txt} (ou 'Esc' para cancelar).")
+            self.statusBar().showMessage(f"📍 1st point at {clicked_x:.1f} Å. Click 2nd point to apply mask with weight {w_txt} (or 'Esc' to cancel).")
             self._plot_masking()
         else:
             p1 = float(min(self.mask_click_pt, clicked_x))
@@ -317,9 +317,9 @@ class MaskingMixin:
             if (p2 - p1) > 1.0:
                 name = "Mask (Weight 0)" if w == 0.0 else "Key Feature (Weight 2)"
                 self.spectral_mask.add_interval(p1, p2, weight=w, name=name)
-                self.statusBar().showMessage(f"✅ Região mascarada adicionada: {p1:.1f} - {p2:.1f} Å (peso={w:.1f})")
+                self.statusBar().showMessage(f"✅ Masked region added: {p1:.1f} - {p2:.1f} Å (weight={w:.1f})")
             else:
-                self.statusBar().showMessage("⚠️ Intervalo muito pequeno. Cancelado.")
+                self.statusBar().showMessage("⚠️ Interval too small. Cancelled.")
 
             self.mask_click_pt = None
             self._update_mask_table()
@@ -329,7 +329,7 @@ class MaskingMixin:
         if event.key in ('escape', 'q'):
             self.mask_click_pt = None
             self._plot_masking()
-            self.statusBar().showMessage("Seleção cancelada.")
+            self.statusBar().showMessage("Selection cancelled.")
         elif event.key == 'd' and event.xdata is not None:
             x = float(event.xdata)
             to_remove = [i for i, it in enumerate(self.spectral_mask.intervals) if it["low"] <= x <= it["upp"]]
@@ -338,7 +338,7 @@ class MaskingMixin:
                     self.spectral_mask.remove_interval(idx)
                 self._update_mask_table()
                 self._plot_masking()
-                self.statusBar().showMessage(f"🗑️ Máscara removida em {x:.1f} Å.")
+                self.statusBar().showMessage(f"🗑️ Mask removed at {x:.1f} Å.")
 
     def _remove_selected_mask(self):
         row = self.tbl_masks.currentRow()
@@ -346,7 +346,7 @@ class MaskingMixin:
             self.spectral_mask.remove_interval(row)
             self._update_mask_table()
             self._plot_masking()
-            self.statusBar().showMessage("Região selecionada removida da máscara.")
+            self.statusBar().showMessage("Selected region removed from mask.")
 
     def _apply_mask_preset(self, preset):
         wl = self.proc_wl if self.proc_wl is not None else self.raw_wl
@@ -354,14 +354,14 @@ class MaskingMixin:
         self.spectral_mask = SpectralMask.from_preset(preset, wl_range=wl_range)
         self._update_mask_table()
         self._plot_masking()
-        self.statusBar().showMessage(f"Preset '{preset.upper()}' carregado com sucesso ({len(self.spectral_mask.intervals)} intervalos).")
+        self.statusBar().showMessage(f"Preset '{preset.upper()}' loaded successfully ({len(self.spectral_mask.intervals)} intervals).")
 
     def _clear_all_masks(self):
         self.spectral_mask.clear()
         self.mask_click_pt = None
         self._update_mask_table()
         self._plot_masking()
-        self.statusBar().showMessage("Todas as máscaras foram removidas.")
+        self.statusBar().showMessage("All masks removed.")
 
     def _on_add_mask_interval(self):
         low = self.spin_mask_low.value()
@@ -397,10 +397,10 @@ class MaskingMixin:
                 self.lbl_mask_loaded_file.setText(f"{os.path.basename(filepath)} ({len(wl_c)} pts)")
             if hasattr(self, 'lbl_loaded_file'):
                 self.lbl_loaded_file.setText(f"{os.path.basename(filepath)} (loaded in Step 2)")
-            self.statusBar().showMessage(f"Espectro carregado para mascaramento: {os.path.basename(filepath)} ({len(wl_c)} pontos)")
+            self.statusBar().showMessage(f"Spectrum loaded for masking: {os.path.basename(filepath)} ({len(wl_c)} points)")
             self._plot_masking()
         except Exception as e:
-            QMessageBox.critical(self, "Erro ao carregar espectro", str(e))
+            QMessageBox.critical(self, "Error Loading Spectrum", str(e))
 
     def _plot_masking(self, preserve_limits=True):
         cur_xlim = self.ax_mask.get_xlim() if preserve_limits and len(self.ax_mask.lines) > 0 else None
@@ -441,7 +441,7 @@ class MaskingMixin:
 
             ax.legend(loc="upper right", frameon=True)
         else:
-            ax.text(0.5, 0.5, "Nenhum espectro carregado no momento.\n\nClique no botao 'Load Spectrum' acima\nou pre-processe seu dado na Etapa 1.",
+            ax.text(0.5, 0.5, "No spectrum loaded.\n\nClick 'Load Spectrum' above\nor preprocess data in Step 1.",
                     horizontalalignment='center', verticalalignment='center',
                     transform=ax.transAxes, color="#64748B", fontsize=12)
 
@@ -488,11 +488,11 @@ class MaskingMixin:
             self.starlight_config.mask_file = rel_mask
             if hasattr(self, 'txt_mask_file'):
                 self.txt_mask_file.setText(rel_mask)
-            QMessageBox.information(self, "Mask Saved", f"Máscara salva com sucesso em:\n{filepath}")
+            QMessageBox.information(self, "Mask Saved", f"Mask saved successfully to:\n{filepath}")
 
     def _on_open_sm_dialog(self):
         filepath, _ = QFileDialog.getOpenFileName(
-            self, "Abrir Arquivo de Máscara STARLIGHT", "", "Starlight Mask (*.mask);;All Files (*)"
+            self, "Open STARLIGHT Mask File", "", "Starlight Mask (*.mask);;All Files (*)"
         )
         if filepath:
             self.spectral_mask = SpectralMask.load_from_file(filepath)

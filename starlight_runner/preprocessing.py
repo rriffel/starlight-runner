@@ -105,6 +105,7 @@ def load_spectrum(filepath):
 def clean_spectrum(wl, flux, eflux=None, remove_nan=True, min_error=1e-20):
     """
     Remove NaNs, Infs, and handle error array validity.
+    Also handles duplicate wavelength values by averaging flux and combining errors.
     """
     wl = np.asarray(wl, dtype=np.float64)
     flux = np.asarray(flux, dtype=np.float64)
@@ -130,7 +131,22 @@ def clean_spectrum(wl, flux, eflux=None, remove_nan=True, min_error=1e-20):
             positive_errs = eflux_clean[~invalid_err]
             floor_val = np.median(positive_errs) if len(positive_errs) > 0 else min_error
             eflux_clean[invalid_err] = floor_val
+            
+        # Deduplicate identical wavelengths if present
+        if len(wl_clean) != len(np.unique(wl_clean)):
+            unique_wl, inv, counts = np.unique(wl_clean, return_inverse=True, return_counts=True)
+            flux_clean = np.bincount(inv, weights=flux_clean) / counts
+            eflux_sq = np.bincount(inv, weights=eflux_clean**2)
+            eflux_clean = np.sqrt(eflux_sq) / counts
+            wl_clean = unique_wl
+            
         return wl_clean, flux_clean, eflux_clean
+
+    # Deduplicate identical wavelengths if present (no eflux)
+    if len(wl_clean) != len(np.unique(wl_clean)):
+        unique_wl, inv, counts = np.unique(wl_clean, return_inverse=True, return_counts=True)
+        flux_clean = np.bincount(inv, weights=flux_clean) / counts
+        wl_clean = unique_wl
         
     return wl_clean, flux_clean, None
 
@@ -220,10 +236,27 @@ def apply_redshift(wl, z):
 def rebin_spectrum(wl, flux, eflux=None, step=1.0, wl_min=None, wl_max=None, kind='linear'):
     """
     Rebin flux and errors to a regular linear wavelength grid with step delta_lambda.
+    Guarantees strictly non-repeating, regularly spaced wavelengths without floating-point drift.
     """
     wl = np.asarray(wl, dtype=np.float64)
     flux = np.asarray(flux, dtype=np.float64)
     
+    # Ensure strictly increasing sorted array
+    if not np.all(np.diff(wl) > 0):
+        sort_idx = np.argsort(wl)
+        wl = wl[sort_idx]
+        flux = flux[sort_idx]
+        if eflux is not None:
+            eflux = np.asarray(eflux, dtype=np.float64)[sort_idx]
+        
+        # Deduplicate identical wavelengths
+        if len(wl) != len(np.unique(wl)):
+            unique_wl, inv, counts = np.unique(wl, return_inverse=True, return_counts=True)
+            flux = np.bincount(inv, weights=flux) / counts
+            if eflux is not None:
+                eflux = np.sqrt(np.bincount(inv, weights=eflux**2)) / counts
+            wl = unique_wl
+
     if wl_min is None:
         wl_min = np.ceil(wl[0])
     if wl_max is None:
@@ -232,7 +265,9 @@ def rebin_spectrum(wl, flux, eflux=None, step=1.0, wl_min=None, wl_max=None, kin
     if wl_min >= wl_max:
         raise ValueError(f"Invalid rebinning range: [{wl_min}, {wl_max}]")
         
-    wl_rebin = np.arange(wl_min, wl_max + step, step)
+    # Exact regular grid using linspace
+    num_points = int(np.floor((wl_max - wl_min) / step + 1e-6)) + 1
+    wl_rebin = np.linspace(wl_min, wl_min + (num_points - 1) * step, num_points)
     
     f_interp = interp1d(wl, flux, kind=kind, fill_value="extrapolate", assume_sorted=True)
     flux_rebin = f_interp(wl_rebin)
@@ -272,7 +307,7 @@ def save_spec_file(filepath, wl, flux, eflux=None, flags=None):
         fmt = ['%.4f', '%.7e', '%.7e', '%d']
         
     os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-    np.savetxt(filepath, data, fmt=fmt, delimiter='\t')
+    np.savetxt(filepath, data, fmt=fmt, delimiter=' ')
     return filepath
 
 
