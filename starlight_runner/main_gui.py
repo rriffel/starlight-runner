@@ -50,10 +50,13 @@ from .gui.config_mixin import ConfigMixin
 def get_logo_path():
     """Locate the logo image file from package assets or project directories."""
     candidates = [
+        os.path.join(os.path.dirname(__file__), "assets", "logo.png"),
         os.path.join(os.path.dirname(__file__), "assets", "logo.jpeg"),
         os.path.join(os.path.dirname(__file__), "assets", "logo.jpg"),
+        os.path.join(os.path.dirname(__file__), "..", "logo.png"),
         os.path.join(os.path.dirname(__file__), "..", "logo.jpeg"),
         os.path.join(os.path.dirname(__file__), "..", "logo.jpg"),
+        os.path.join(os.getcwd(), "logo.png"),
         os.path.join(os.getcwd(), "logo.jpeg"),
         os.path.join(os.getcwd(), "logo.jpg"),
     ]
@@ -177,12 +180,10 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
             logo_pix = QPixmap(logo_path)
             if not logo_pix.isNull():
                 lbl_logo = QLabel()
-                scaled_pix = logo_pix.scaledToWidth(216, Qt.SmoothTransformation)
+                scaled_pix = logo_pix.scaledToWidth(190, Qt.SmoothTransformation)
                 lbl_logo.setPixmap(scaled_pix)
                 lbl_logo.setAlignment(Qt.AlignCenter)
-                lbl_logo.setStyleSheet(
-                    f"border: 1px solid {BORDER_COLOR}; border-radius: 8px; padding: 2px; background-color: #FFFFFF; margin-bottom: 12px;"
-                )
+                lbl_logo.setStyleSheet("background: transparent; border: none; margin-bottom: 12px;")
                 layout.addWidget(lbl_logo)
 
         # Step Navigation Buttons
