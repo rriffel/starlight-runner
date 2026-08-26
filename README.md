@@ -20,8 +20,30 @@ A modern, high-performance workflow suite and graphical interface for the **STAR
 
 ## 📦 Installation
 
-### 1. From Git Repository
-Clone the repository and install in editable mode:
+### 1. Create a Conda Environment (Recommended)
+We recommend creating a dedicated Conda / Mamba environment with Python 3.10:
+
+```bash
+# Create the environment
+conda create -n starlight_env python=3.10 -y
+
+# Activate the environment
+conda activate starlight_env
+```
+
+---
+
+### 2. Install `starlight-runner`
+
+#### Option A: Direct Install via `pip` (from GitHub)
+Install directly into your active environment without cloning manually:
+
+```bash
+pip install git+https://github.com/rriffel/starlight-runner.git
+```
+
+#### Option B: Local / Development Install (Editable Mode)
+If you want to clone the repository for development or to access example test files and configuration templates:
 
 ```bash
 git clone https://github.com/rriffel/starlight-runner.git
@@ -29,8 +51,10 @@ cd starlight-runner
 pip install -e .
 ```
 
-### 2. Dependencies
-Requires Python $\ge$ 3.8 and standard scientific packages:
+---
+
+### 3. Dependencies
+All required dependencies are installed automatically by `pip`. They can also be installed manually via:
 
 ```bash
 pip install -r requirements.txt
