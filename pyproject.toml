@@ -18,6 +18,7 @@ dependencies = [
     "pandas",
     "matplotlib",
     "PyQt5",
+    "astropy",
 ]
 
 [project.urls]
