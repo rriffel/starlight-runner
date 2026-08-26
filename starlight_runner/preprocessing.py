@@ -363,6 +363,67 @@ def varsmooth_error(x, error, sig_x, xout=None, oversample=1):
     return np.sqrt(np.maximum(conv_var, 0.0))
 
 
+def load_resolution_vector(wl, val=None, file_path=None, name="Resolution"):
+    """
+    Constructs a 1D resolution array of length len(wl) for a given mode (R, sigma, or FWHM).
+    
+    Accepts:
+      - A scalar numeric value (float/int) -> expands to np.full_like(wl, val)
+      - A 1D array or sequence -> mapped/interpolated onto len(wl)
+      - A filepath (str) containing either:
+          * 2 columns: [wavelength, resolution_value] -> interpolated onto wl
+          * 1 column: vector of resolution values -> mapped/interpolated onto len(wl)
+    """
+    from scipy import interpolate
+    wl = np.asarray(wl, dtype=np.float64)
+    
+    if file_path and os.path.exists(file_path):
+        try:
+            # Filter lines starting with comments (#, ;, !)
+            valid_lines = []
+            with open(file_path, 'r') as f:
+                for line in f:
+                    s = line.strip()
+                    if s and not s.startswith(('#', ';', '!', '%')):
+                        valid_lines.append(s)
+            if not valid_lines:
+                raise ValueError(f"File '{file_path}' is empty or contains only comments.")
+            
+            import io
+            data = np.loadtxt(io.StringIO('\n'.join(valid_lines)))
+            if data.ndim == 2 and data.shape[1] >= 2:
+                # 2 columns: [wavelength, value]
+                x_file = data[:, 0]
+                y_file = data[:, 1]
+                f_interp = interpolate.interp1d(x_file, y_file, bounds_error=False, fill_value="extrapolate")
+                return f_interp(wl)
+            elif data.ndim == 1 or (data.ndim == 2 and data.shape[1] == 1):
+                # 1 column: vector of values matching or mapped to len(lambda)
+                y_file = data.ravel()
+                if len(y_file) == len(wl):
+                    return y_file
+                else:
+                    x_mock = np.linspace(wl[0], wl[-1], len(y_file))
+                    f_interp = interpolate.interp1d(x_mock, y_file, bounds_error=False, fill_value="extrapolate")
+                    return f_interp(wl)
+        except Exception as e:
+            raise ValueError(f"Could not load {name} file '{file_path}': {e}")
+
+    if val is not None:
+        if isinstance(val, (list, tuple, np.ndarray)):
+            arr = np.asarray(val, dtype=np.float64)
+            if len(arr) == len(wl):
+                return arr
+            else:
+                x_mock = np.linspace(wl[0], wl[-1], len(arr))
+                f_interp = interpolate.interp1d(x_mock, arr, bounds_error=False, fill_value="extrapolate")
+                return f_interp(wl)
+        elif float(val) > 0:
+            return np.full_like(wl, float(val))
+
+    return None
+
+
 def downgrade_resolution(
     wl, flux, eflux=None,
     mode="R",
@@ -382,42 +443,31 @@ def downgrade_resolution(
         mode (str): 'R' (Resolving power lambda/delta_lambda), 
                     'sigma' (Velocity dispersion in km/s),
                     'FWHM' (FWHM in Angstroms).
-        val_ini (float, optional): Initial scalar resolution value.
-        val_target (float, optional): Target scalar resolution value.
-        file_ini (str, optional): Path to 2-column text file (wavelength, val) for initial resolution.
-        file_target (str, optional): Path to 2-column text file for target resolution.
+        val_ini (float or array, optional): Initial scalar resolution value or vector of len(wl).
+        val_target (float or array, optional): Target scalar resolution value or vector of len(wl).
+        file_ini (str, optional): Path to file for initial resolution vector.
+        file_target (str, optional): Path to file for target resolution vector.
         oversample (int): Oversampling factor for FFT convolution.
         
     Returns:
         wl, flux_downgraded, eflux_downgraded
     """
-    from scipy import interpolate
     wl = np.asarray(wl, dtype=np.float64)
     flux = np.asarray(flux, dtype=np.float64)
     c_kms = 299792.458
     fwhm_factor = 2.3548200450309493  # 2 * sqrt(2 * ln(2))
 
-    # 1. Evaluate Initial Resolution Array
-    if file_ini and os.path.exists(file_ini):
-        data_ini = np.loadtxt(file_ini)
-        f_interp = interpolate.interp1d(data_ini[:, 0], data_ini[:, 1], bounds_error=False, fill_value="extrapolate")
-        raw_ini = f_interp(wl)
-    elif val_ini is not None and float(val_ini) > 0:
-        raw_ini = np.full_like(wl, float(val_ini))
-    else:
+    # 1. Resolve Initial Resolution Vector of len(wl)
+    raw_ini = load_resolution_vector(wl, val=val_ini, file_path=file_ini, name="Initial Resolution")
+    if raw_ini is None:
         return wl, flux.copy(), (eflux.copy() if eflux is not None else None)
 
-    # 2. Evaluate Target Resolution Array
-    if file_target and os.path.exists(file_target):
-        data_tgt = np.loadtxt(file_target)
-        f_interp = interpolate.interp1d(data_tgt[:, 0], data_tgt[:, 1], bounds_error=False, fill_value="extrapolate")
-        raw_tgt = f_interp(wl)
-    elif val_target is not None and float(val_target) > 0:
-        raw_tgt = np.full_like(wl, float(val_target))
-    else:
+    # 2. Resolve Target Resolution Vector of len(wl)
+    raw_tgt = load_resolution_vector(wl, val=val_target, file_path=file_target, name="Target Resolution")
+    if raw_tgt is None:
         return wl, flux.copy(), (eflux.copy() if eflux is not None else None)
 
-    # 3. Convert both to FWHM(lambda) in Angstroms
+    # 3. Convert both vectors to FWHM(lambda) in Angstroms
     mode_str = mode.lower()
     if "r" in mode_str:
         # Resolving power R = lambda / FWHM -> FWHM = lambda / R

@@ -49,7 +49,11 @@ class ConfigMixin:
                     "seed": self.spin_seed.value(),
                     "downgrade_res_enabled": self.chk_downgrade_res.isChecked() if hasattr(self, 'chk_downgrade_res') else False,
                     "res_mode": self.combo_res_mode.currentIndex() if hasattr(self, 'combo_res_mode') else 0,
+                    "res_ini_is_file": self.rad_res_ini_file.isChecked() if hasattr(self, 'rad_res_ini_file') else False,
+                    "res_ini_file_path": getattr(self, "res_ini_file_path", ""),
                     "res_ini": self.spin_res_ini.value() if hasattr(self, 'spin_res_ini') else 5000.0,
+                    "res_tgt_is_file": self.rad_res_tgt_file.isChecked() if hasattr(self, 'rad_res_tgt_file') else False,
+                    "res_tgt_file_path": getattr(self, "res_tgt_file_path", ""),
                     "res_tgt": self.spin_res_tgt.value() if hasattr(self, 'spin_res_tgt') else 2000.0,
                     "z": self.spin_z.value(),
                     "law": self.combo_law.currentText(),
@@ -103,6 +107,27 @@ class ConfigMixin:
                     self.chk_downgrade_res.setChecked(bool(state["downgrade_res_enabled"]))
                 if hasattr(self, 'combo_res_mode') and "res_mode" in state:
                     self.combo_res_mode.setCurrentIndex(int(state["res_mode"]))
+                
+                if hasattr(self, 'rad_res_ini_file') and "res_ini_is_file" in state:
+                    if state["res_ini_is_file"]:
+                        self.rad_res_ini_file.setChecked(True)
+                    else:
+                        self.rad_res_ini_const.setChecked(True)
+                if "res_ini_file_path" in state and state["res_ini_file_path"]:
+                    self.res_ini_file_path = state["res_ini_file_path"]
+                    if hasattr(self, 'lbl_res_ini_file'):
+                        self.lbl_res_ini_file.setText(f"Vector: {os.path.basename(self.res_ini_file_path)}")
+
+                if hasattr(self, 'rad_res_tgt_file') and "res_tgt_is_file" in state:
+                    if state["res_tgt_is_file"]:
+                        self.rad_res_tgt_file.setChecked(True)
+                    else:
+                        self.rad_res_tgt_const.setChecked(True)
+                if "res_tgt_file_path" in state and state["res_tgt_file_path"]:
+                    self.res_tgt_file_path = state["res_tgt_file_path"]
+                    if hasattr(self, 'lbl_res_tgt_file'):
+                        self.lbl_res_tgt_file.setText(f"Vector: {os.path.basename(self.res_tgt_file_path)}")
+
                 if hasattr(self, 'spin_res_ini') and "res_ini" in state:
                     self.spin_res_ini.setValue(float(state["res_ini"]))
                 if hasattr(self, 'spin_res_tgt') and "res_tgt" in state:

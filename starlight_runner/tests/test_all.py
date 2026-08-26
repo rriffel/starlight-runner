@@ -67,6 +67,33 @@ class TestPreprocessing(unittest.TestCase):
         )
         self.assertTrue(f_s.min() > flx.min())
 
+    def test_downgrade_resolution_vector_file(self):
+        import tempfile
+        wl = np.linspace(5000, 6000, 1000)
+        flx = 1.0 - 0.6 * np.exp(-0.5 * ((wl - 5500) / 1.0)**2)
+        
+        # Test with 2-column resolution file (wavelength, R)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            tgt_file = f.name
+            for w in np.linspace(4800, 6200, 50):
+                f.write(f"{w:.1f} 1800.0\n")
+
+        # Test with 1-column resolution file of len(lambda)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f_ini:
+            ini_file = f_ini.name
+            for _ in range(len(wl)):
+                f_ini.write("5000.0\n")
+
+        try:
+            w_s, f_s, _ = downgrade_resolution(
+                wl, flx, mode="R", file_ini=ini_file, file_target=tgt_file
+            )
+            self.assertEqual(len(w_s), len(wl))
+            self.assertTrue(f_s.min() > flx.min())
+        finally:
+            if os.path.exists(tgt_file): os.remove(tgt_file)
+            if os.path.exists(ini_file): os.remove(ini_file)
+
 
 class TestMasking(unittest.TestCase):
     def test_mask_creation_and_json(self):

@@ -110,41 +110,77 @@ class PreprocessingMixin:
             "FWHM (Å)"
         ])
         self.combo_res_mode.currentIndexChanged.connect(self._on_res_mode_changed)
-        form_down.addRow("Mode:", self.combo_res_mode)
+        form_down.addRow("Physical Mode:", self.combo_res_mode)
 
-        # Initial Resolution row
-        row_ini = QHBoxLayout()
+        # Initial Resolution Source Selector
+        lbl_ini_hdr = QLabel("Initial Resolution (Observed):")
+        lbl_ini_hdr.setStyleSheet("font-weight: 600; color: #475569; font-size: 11px; margin-top: 4px;")
+        form_down.addRow(lbl_ini_hdr)
+
+        self.rad_res_ini_const = QRadioButton("Constant:")
+        self.rad_res_ini_const.setChecked(True)
+        self.rad_res_ini_file = QRadioButton("Vector File (len λ):")
+
+        btn_grp_ini = QButtonGroup(self)
+        btn_grp_ini.addButton(self.rad_res_ini_const)
+        btn_grp_ini.addButton(self.rad_res_ini_file)
+        btn_grp_ini.buttonToggled.connect(self._on_res_source_toggled)
+
+        row_ini_const = QHBoxLayout()
+        row_ini_const.addWidget(self.rad_res_ini_const)
         self.spin_res_ini = QDoubleSpinBox()
         self.spin_res_ini.setRange(1.0, 1000000.0)
         self.spin_res_ini.setDecimals(1)
         self.spin_res_ini.setValue(5000.0)
         self.spin_res_ini.valueChanged.connect(self._on_preproc_param_changed)
-        row_ini.addWidget(self.spin_res_ini, 1)
+        row_ini_const.addWidget(self.spin_res_ini, 1)
+        form_down.addRow(row_ini_const)
 
-        self.btn_res_ini_file = QPushButton("File...")
-        self.btn_res_ini_file.setToolTip("Select 2-column text file (λ vs Initial Resolution)")
+        row_ini_file = QHBoxLayout()
+        row_ini_file.addWidget(self.rad_res_ini_file)
+        self.btn_res_ini_file = QPushButton("Browse...")
+        self.btn_res_ini_file.setEnabled(False)
+        self.btn_res_ini_file.setToolTip("Select file with resolution vector of length len(λ) or 2-columns (λ, val)")
         self.btn_res_ini_file.clicked.connect(self._on_browse_res_ini_file)
-        row_ini.addWidget(self.btn_res_ini_file)
-        form_down.addRow("Initial Res:", row_ini)
+        row_ini_file.addWidget(self.btn_res_ini_file)
+        form_down.addRow(row_ini_file)
 
         self.lbl_res_ini_file = QLabel("")
         self.lbl_res_ini_file.setStyleSheet(f"color: {MUTED}; font-size: 10px; font-style: italic;")
         form_down.addRow("", self.lbl_res_ini_file)
 
-        # Target Resolution row
-        row_tgt = QHBoxLayout()
+        # Target Resolution Source Selector
+        lbl_tgt_hdr = QLabel("Target Resolution (Desired / Model):")
+        lbl_tgt_hdr.setStyleSheet("font-weight: 600; color: #475569; font-size: 11px; margin-top: 4px;")
+        form_down.addRow(lbl_tgt_hdr)
+
+        self.rad_res_tgt_const = QRadioButton("Constant:")
+        self.rad_res_tgt_const.setChecked(True)
+        self.rad_res_tgt_file = QRadioButton("Vector File (len λ):")
+
+        btn_grp_tgt = QButtonGroup(self)
+        btn_grp_tgt.addButton(self.rad_res_tgt_const)
+        btn_grp_tgt.addButton(self.rad_res_tgt_file)
+        btn_grp_tgt.buttonToggled.connect(self._on_res_source_toggled)
+
+        row_tgt_const = QHBoxLayout()
+        row_tgt_const.addWidget(self.rad_res_tgt_const)
         self.spin_res_tgt = QDoubleSpinBox()
         self.spin_res_tgt.setRange(1.0, 1000000.0)
         self.spin_res_tgt.setDecimals(1)
         self.spin_res_tgt.setValue(2000.0)
         self.spin_res_tgt.valueChanged.connect(self._on_preproc_param_changed)
-        row_tgt.addWidget(self.spin_res_tgt, 1)
+        row_tgt_const.addWidget(self.spin_res_tgt, 1)
+        form_down.addRow(row_tgt_const)
 
-        self.btn_res_tgt_file = QPushButton("File...")
-        self.btn_res_tgt_file.setToolTip("Select 2-column text file (λ vs Target Resolution)")
+        row_tgt_file = QHBoxLayout()
+        row_tgt_file.addWidget(self.rad_res_tgt_file)
+        self.btn_res_tgt_file = QPushButton("Browse...")
+        self.btn_res_tgt_file.setEnabled(False)
+        self.btn_res_tgt_file.setToolTip("Select file with resolution vector of length len(λ) or 2-columns (λ, val)")
         self.btn_res_tgt_file.clicked.connect(self._on_browse_res_tgt_file)
-        row_tgt.addWidget(self.btn_res_tgt_file)
-        form_down.addRow("Target Res:", row_tgt)
+        row_tgt_file.addWidget(self.btn_res_tgt_file)
+        form_down.addRow(row_tgt_file)
 
         self.lbl_res_tgt_file = QLabel("")
         self.lbl_res_tgt_file.setStyleSheet(f"color: {MUTED}; font-size: 10px; font-style: italic;")
@@ -427,32 +463,39 @@ class PreprocessingMixin:
         self.spin_res_tgt.blockSignals(False)
         self._on_preproc_param_changed()
 
+    def _on_res_source_toggled(self):
+        ini_is_file = self.rad_res_ini_file.isChecked()
+        self.spin_res_ini.setEnabled(not ini_is_file)
+        self.btn_res_ini_file.setEnabled(ini_is_file)
+
+        tgt_is_file = self.rad_res_tgt_file.isChecked()
+        self.spin_res_tgt.setEnabled(not tgt_is_file)
+        self.btn_res_tgt_file.setEnabled(tgt_is_file)
+
+        self._on_preproc_param_changed()
+
     def _on_browse_res_ini_file(self):
         f, _ = QFileDialog.getOpenFileName(
-            self, "Select Initial Resolution Curve File", "", "Text/Data Files (*.txt *.dat *.csv);;All Files (*)"
+            self, "Select Initial Resolution Vector File", "", "Text/Data Files (*.txt *.dat *.csv);;All Files (*)"
         )
         if f:
             self.res_ini_file_path = f
-            self.lbl_res_ini_file.setText(f"File: {os.path.basename(f)}")
-            self.spin_res_ini.setEnabled(False)
+            self.lbl_res_ini_file.setText(f"Vector: {os.path.basename(f)}")
         else:
             self.res_ini_file_path = None
             self.lbl_res_ini_file.setText("")
-            self.spin_res_ini.setEnabled(True)
         self._on_preproc_param_changed()
 
     def _on_browse_res_tgt_file(self):
         f, _ = QFileDialog.getOpenFileName(
-            self, "Select Target Resolution Curve File", "", "Text/Data Files (*.txt *.dat *.csv);;All Files (*)"
+            self, "Select Target Resolution Vector File", "", "Text/Data Files (*.txt *.dat *.csv);;All Files (*)"
         )
         if f:
             self.res_tgt_file_path = f
-            self.lbl_res_tgt_file.setText(f"File: {os.path.basename(f)}")
-            self.spin_res_tgt.setEnabled(False)
+            self.lbl_res_tgt_file.setText(f"Vector: {os.path.basename(f)}")
         else:
             self.res_tgt_file_path = None
             self.lbl_res_tgt_file.setText("")
-            self.spin_res_tgt.setEnabled(True)
         self._on_preproc_param_changed()
 
     def _on_preproc_param_changed(self):
@@ -565,10 +608,20 @@ class PreprocessingMixin:
             if hasattr(self, 'chk_downgrade_res') and self.chk_downgrade_res.isChecked():
                 idx = self.combo_res_mode.currentIndex()
                 mode_val = "R" if idx == 0 else ("sigma" if idx == 1 else "FWHM")
-                val_ini = self.spin_res_ini.value()
-                val_tgt = self.spin_res_tgt.value()
-                file_ini = getattr(self, "res_ini_file_path", None)
-                file_tgt = getattr(self, "res_tgt_file_path", None)
+
+                if hasattr(self, 'rad_res_ini_file') and self.rad_res_ini_file.isChecked() and getattr(self, "res_ini_file_path", None):
+                    val_ini = None
+                    file_ini = self.res_ini_file_path
+                else:
+                    val_ini = self.spin_res_ini.value()
+                    file_ini = None
+
+                if hasattr(self, 'rad_res_tgt_file') and self.rad_res_tgt_file.isChecked() and getattr(self, "res_tgt_file_path", None):
+                    val_tgt = None
+                    file_tgt = self.res_tgt_file_path
+                else:
+                    val_tgt = self.spin_res_tgt.value()
+                    file_tgt = None
 
                 wl_curr, flx_curr, eflx_curr = downgrade_resolution(
                     wl_rest, flx_rest, eflux=eflx_rest,
