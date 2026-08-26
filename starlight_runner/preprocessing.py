@@ -281,6 +281,177 @@ def rebin_spectrum(wl, flux, eflux=None, step=1.0, wl_min=None, wl_max=None, kin
     return wl_rebin, flux_rebin, None
 
 
+def varsmooth(x, y, sig_x, xout=None, oversample=1):
+    """
+    Fourier convolution with a Gaussian with variable sigma per pixel
+    using FFT and analytic Fourier Transform of the Gaussian (Cappellari 2022 / pPXF).
+    
+    :param x: coordinate array of every pixel (wavelength in Angstroms).
+    :param y: input flux vector (or 2D array of column spectra).
+    :param sig_x: Gaussian sigma of every pixel in units of x (Angstroms).
+    :param oversample: oversampling factor before convolution (default 1).
+    :param xout: optional output x coordinate.
+    :return: convolved flux vector.
+    """
+    from scipy import interpolate
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    sig_x = np.asarray(sig_x, dtype=np.float64)
+    
+    sig_x = np.maximum(sig_x, 1e-6)
+    
+    dx = np.gradient(x)
+    dx[dx == 0] = 1e-6
+    sig = sig_x / dx
+    sig_max = np.max(sig) * oversample
+    xs = np.cumsum(sig_max / sig)
+    n = int(np.ceil(xs[-1] - xs[0]))
+    if n <= 1:
+        return y.copy()
+        
+    x_new = np.linspace(xs[0], xs[-1], n)
+    y_new = interpolate.interp1d(xs, y.T, bounds_error=False, fill_value="extrapolate")(x_new)
+
+    npad = 2 ** int(np.ceil(np.log2(n)))
+    ft = np.fft.rfft(y_new, npad)
+    w = np.linspace(0, np.pi * sig_max, ft.shape[-1])
+    ft_gau = np.exp(-0.5 * (w ** 2))
+    y_conv = np.fft.irfft(ft * ft_gau, npad).T[:n]
+
+    if xout is not None:
+        xs = interpolate.interp1d(x, xs, bounds_error=False, fill_value="extrapolate")(xout)
+
+    return interpolate.interp1d(x_new, y_conv.T, bounds_error=False, fill_value="extrapolate")(xs).T
+
+
+def varsmooth_error(x, error, sig_x, xout=None, oversample=1):
+    """
+    Propagate uncertainties through variable-sigma convolution (Klein 2021 / PACCE).
+    Convolves variance (error^2) with Gaussian kernel sig_x / sqrt(2).
+    """
+    from scipy import interpolate
+    x = np.asarray(x, dtype=np.float64)
+    error = np.asarray(error, dtype=np.float64)
+    sig_x = np.asarray(sig_x, dtype=np.float64)
+
+    y = error ** 2
+    sig_x = sig_x / np.sqrt(2.0)
+    sig_x = np.maximum(sig_x, 1e-6)
+
+    dx = np.gradient(x)
+    dx[dx == 0] = 1e-6
+    sig = sig_x / dx
+    sig_max = np.max(sig) * oversample
+    xs = np.cumsum(sig_max / sig)
+    n = int(np.ceil(xs[-1] - xs[0]))
+    if n <= 1:
+        return error.copy()
+        
+    x_new = np.linspace(xs[0], xs[-1], n)
+    y_new = interpolate.interp1d(xs, y.T, bounds_error=False, fill_value="extrapolate")(x_new)
+
+    npad = 2 ** int(np.ceil(np.log2(n)))
+    ft = np.fft.rfft(y_new, npad)
+    w = np.linspace(0, np.pi * sig_max, ft.shape[-1])
+    ft_gau = np.exp(-0.5 * (w ** 2))
+    y_conv = np.fft.irfft(ft * ft_gau, npad).T[:n]
+
+    if xout is not None:
+        xs = interpolate.interp1d(x, xs, bounds_error=False, fill_value="extrapolate")(xout)
+
+    conv_var = interpolate.interp1d(x_new, y_conv.T, bounds_error=False, fill_value="extrapolate")(xs).T
+    return np.sqrt(np.maximum(conv_var, 0.0))
+
+
+def downgrade_resolution(
+    wl, flux, eflux=None,
+    mode="R",
+    val_ini=None,
+    val_target=None,
+    file_ini=None,
+    file_target=None,
+    oversample=1
+):
+    """
+    Downgrades spectral resolution using PACCE / pPXF variable-sigma Gaussian convolution (varsmooth).
+    
+    Parameters:
+        wl (np.ndarray): Wavelength array (Angstroms).
+        flux (np.ndarray): Flux array.
+        eflux (np.ndarray, optional): Flux uncertainty array.
+        mode (str): 'R' (Resolving power lambda/delta_lambda), 
+                    'sigma' (Velocity dispersion in km/s),
+                    'FWHM' (FWHM in Angstroms).
+        val_ini (float, optional): Initial scalar resolution value.
+        val_target (float, optional): Target scalar resolution value.
+        file_ini (str, optional): Path to 2-column text file (wavelength, val) for initial resolution.
+        file_target (str, optional): Path to 2-column text file for target resolution.
+        oversample (int): Oversampling factor for FFT convolution.
+        
+    Returns:
+        wl, flux_downgraded, eflux_downgraded
+    """
+    from scipy import interpolate
+    wl = np.asarray(wl, dtype=np.float64)
+    flux = np.asarray(flux, dtype=np.float64)
+    c_kms = 299792.458
+    fwhm_factor = 2.3548200450309493  # 2 * sqrt(2 * ln(2))
+
+    # 1. Evaluate Initial Resolution Array
+    if file_ini and os.path.exists(file_ini):
+        data_ini = np.loadtxt(file_ini)
+        f_interp = interpolate.interp1d(data_ini[:, 0], data_ini[:, 1], bounds_error=False, fill_value="extrapolate")
+        raw_ini = f_interp(wl)
+    elif val_ini is not None and float(val_ini) > 0:
+        raw_ini = np.full_like(wl, float(val_ini))
+    else:
+        return wl, flux.copy(), (eflux.copy() if eflux is not None else None)
+
+    # 2. Evaluate Target Resolution Array
+    if file_target and os.path.exists(file_target):
+        data_tgt = np.loadtxt(file_target)
+        f_interp = interpolate.interp1d(data_tgt[:, 0], data_tgt[:, 1], bounds_error=False, fill_value="extrapolate")
+        raw_tgt = f_interp(wl)
+    elif val_target is not None and float(val_target) > 0:
+        raw_tgt = np.full_like(wl, float(val_target))
+    else:
+        return wl, flux.copy(), (eflux.copy() if eflux is not None else None)
+
+    # 3. Convert both to FWHM(lambda) in Angstroms
+    mode_str = mode.lower()
+    if "r" in mode_str:
+        # Resolving power R = lambda / FWHM -> FWHM = lambda / R
+        fwhm_ini = np.divide(wl, np.maximum(raw_ini, 1.0))
+        fwhm_tgt = np.divide(wl, np.maximum(raw_tgt, 1.0))
+    elif "sigma" in mode_str:
+        # Velocity dispersion sigma in km/s -> FWHM = (sigma * 2.355 / c) * lambda
+        fwhm_ini = (raw_ini * fwhm_factor / c_kms) * wl
+        fwhm_tgt = (raw_tgt * fwhm_factor / c_kms) * wl
+    else:  # FWHM in Angstroms
+        fwhm_ini = raw_ini
+        fwhm_tgt = raw_tgt
+
+    # 4. Calculate Differential Convolution Sigma (in Angstroms)
+    diff_fwhm_sq = np.maximum(0.0, fwhm_tgt**2 - fwhm_ini**2)
+    sig_conv = np.sqrt(diff_fwhm_sq) / fwhm_factor
+
+    if np.all(sig_conv <= 1e-4):
+        # Target resolution is higher than or equal to initial, no smoothing needed
+        return wl, flux.copy(), (eflux.copy() if eflux is not None else None)
+
+    sig_conv = np.clip(sig_conv, 0.001, None)
+
+    # 5. Convolve flux and errors
+    flux_smooth = varsmooth(wl, flux, sig_x=sig_conv, oversample=oversample)
+    
+    if eflux is not None:
+        eflux_arr = np.asarray(eflux, dtype=np.float64)
+        eflux_smooth = varsmooth_error(wl, eflux_arr, sig_x=sig_conv, oversample=oversample)
+        return wl, flux_smooth, eflux_smooth
+
+    return wl, flux_smooth, None
+
+
 def save_spec_file(filepath, wl, flux, eflux=None, flags=None):
     """
     Save spectrum to Starlight ASCII .spec format:

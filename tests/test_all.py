@@ -1,7 +1,10 @@
 import unittest
 import numpy as np
 import os
-from starlight_runner.preprocessing import clean_spectrum, rebin_spectrum, deredden, apply_redshift, trim_spectral_bounds
+from starlight_runner.preprocessing import (
+    clean_spectrum, rebin_spectrum, deredden, apply_redshift,
+    trim_spectral_bounds, varsmooth, varsmooth_error, downgrade_resolution
+)
 from starlight_runner.masking import SpectralMask
 from starlight_runner.runner import StarlightConfig, generate_grid_files
 from starlight_runner.parser import StarlightOutput
@@ -32,6 +35,37 @@ class TestPreprocessing(unittest.TestCase):
         eflx = np.array([0.1, 0.1, 0.1])
         w_d, f_d, e_d = deredden(wl, flx, eflux=eflx, law="CCM", av=1.0, rv=3.1)
         self.assertTrue(f_d[0] > f_d[2])
+
+    def test_downgrade_resolution_R(self):
+        wl = np.linspace(5000, 6000, 1000)
+        # Absorption line at 5500 A with sigma=1.0 A
+        flx = 1.0 - 0.6 * np.exp(-0.5 * ((wl - 5500) / 1.0)**2)
+        eflx = np.full_like(flx, 0.05)
+        
+        # Downgrade from R=5000 to R=1500
+        w_s, f_s, e_s = downgrade_resolution(
+            wl, flx, eflux=eflx, mode="R", val_ini=5000.0, val_target=1500.0
+        )
+        self.assertEqual(len(w_s), len(wl))
+        # Absorption core must be shallower after convolution
+        self.assertTrue(f_s.min() > flx.min())
+        self.assertIsNotNone(e_s)
+
+    def test_downgrade_resolution_sigma(self):
+        wl = np.linspace(4000, 5000, 1000)
+        flx = 1.0 - 0.5 * np.exp(-0.5 * ((wl - 4500) / 1.0)**2)
+        w_s, f_s, _ = downgrade_resolution(
+            wl, flx, mode="sigma", val_ini=30.0, val_target=120.0
+        )
+        self.assertTrue(f_s.min() > flx.min())
+
+    def test_downgrade_resolution_fwhm(self):
+        wl = np.linspace(6000, 7000, 1000)
+        flx = 1.0 - 0.5 * np.exp(-0.5 * ((wl - 6500) / 1.0)**2)
+        w_s, f_s, _ = downgrade_resolution(
+            wl, flx, mode="FWHM", val_ini=1.0, val_target=3.0
+        )
+        self.assertTrue(f_s.min() > flx.min())
 
 
 class TestMasking(unittest.TestCase):

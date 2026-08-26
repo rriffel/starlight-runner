@@ -21,7 +21,8 @@ from ..reddening import REDDENING_LAWS, deredden
 from ..preprocessing import (
     load_spectrum, clean_spectrum, apply_redshift,
     rebin_spectrum, exclude_spectral_regions,
-    trim_spectral_bounds, save_spec_file, DEFAULT_TELLURIC_REGIONS
+    trim_spectral_bounds, save_spec_file, DEFAULT_TELLURIC_REGIONS,
+    downgrade_resolution, varsmooth, varsmooth_error
 )
 from ..masking import SpectralMask
 from ..custom_widgets import InteractiveCutDialog
@@ -55,8 +56,74 @@ class PreprocessingMixin:
         f_load.addWidget(self.lbl_loaded_file)
         left_layout.addWidget(grp_load)
 
-        # 2. Physical Corrections Group
-        grp_corr = QGroupBox("2. Physical Corrections")
+        # 2. Downgrade Resolution Group
+        grp_downgrade = QGroupBox("2. Downgrade Resolution")
+        f_downgrade = QVBoxLayout(grp_downgrade)
+        f_downgrade.setSpacing(8)
+
+        self.chk_downgrade_res = QCheckBox("Downgrade Resolution")
+        self.chk_downgrade_res.setStyleSheet("font-weight: bold; color: #1E293B;")
+        self.chk_downgrade_res.toggled.connect(self._on_toggle_downgrade_res)
+        f_downgrade.addWidget(self.chk_downgrade_res)
+
+        self.w_downgrade_controls = QWidget()
+        form_down = QFormLayout(self.w_downgrade_controls)
+        form_down.setContentsMargins(0, 0, 0, 0)
+        form_down.setSpacing(8)
+
+        self.combo_res_mode = QComboBox()
+        self.combo_res_mode.addItems([
+            "Resolving Power (R = λ/Δλ)",
+            "Velocity Dispersion σ (km/s)",
+            "FWHM (Å)"
+        ])
+        self.combo_res_mode.currentIndexChanged.connect(self._on_res_mode_changed)
+        form_down.addRow("Mode:", self.combo_res_mode)
+
+        # Initial Resolution row
+        row_ini = QHBoxLayout()
+        self.spin_res_ini = QDoubleSpinBox()
+        self.spin_res_ini.setRange(1.0, 1000000.0)
+        self.spin_res_ini.setDecimals(1)
+        self.spin_res_ini.setValue(5000.0)
+        self.spin_res_ini.valueChanged.connect(self._on_preproc_param_changed)
+        row_ini.addWidget(self.spin_res_ini, 1)
+
+        self.btn_res_ini_file = QPushButton("File...")
+        self.btn_res_ini_file.setToolTip("Select 2-column text file (λ vs Initial Resolution)")
+        self.btn_res_ini_file.clicked.connect(self._on_browse_res_ini_file)
+        row_ini.addWidget(self.btn_res_ini_file)
+        form_down.addRow("Initial Res:", row_ini)
+
+        self.lbl_res_ini_file = QLabel("")
+        self.lbl_res_ini_file.setStyleSheet(f"color: {MUTED}; font-size: 10px; font-style: italic;")
+        form_down.addRow("", self.lbl_res_ini_file)
+
+        # Target Resolution row
+        row_tgt = QHBoxLayout()
+        self.spin_res_tgt = QDoubleSpinBox()
+        self.spin_res_tgt.setRange(1.0, 1000000.0)
+        self.spin_res_tgt.setDecimals(1)
+        self.spin_res_tgt.setValue(2000.0)
+        self.spin_res_tgt.valueChanged.connect(self._on_preproc_param_changed)
+        row_tgt.addWidget(self.spin_res_tgt, 1)
+
+        self.btn_res_tgt_file = QPushButton("File...")
+        self.btn_res_tgt_file.setToolTip("Select 2-column text file (λ vs Target Resolution)")
+        self.btn_res_tgt_file.clicked.connect(self._on_browse_res_tgt_file)
+        row_tgt.addWidget(self.btn_res_tgt_file)
+        form_down.addRow("Target Res:", row_tgt)
+
+        self.lbl_res_tgt_file = QLabel("")
+        self.lbl_res_tgt_file.setStyleSheet(f"color: {MUTED}; font-size: 10px; font-style: italic;")
+        form_down.addRow("", self.lbl_res_tgt_file)
+
+        f_downgrade.addWidget(self.w_downgrade_controls)
+        self.w_downgrade_controls.setEnabled(False)
+        left_layout.addWidget(grp_downgrade)
+
+        # 3. Physical Corrections Group
+        grp_corr = QGroupBox("3. Physical Corrections")
         form_corr = QFormLayout(grp_corr)
         form_corr.setSpacing(10)
 
@@ -87,8 +154,8 @@ class PreprocessingMixin:
 
         left_layout.addWidget(grp_corr)
 
-        # 3. Rebinning Group
-        grp_rebin = QGroupBox("3. Rebinning")
+        # 4. Rebinning Group
+        grp_rebin = QGroupBox("4. Rebinning")
         form_rebin = QFormLayout(grp_rebin)
         form_rebin.setSpacing(10)
 
@@ -100,8 +167,8 @@ class PreprocessingMixin:
         form_rebin.addRow("Step (Δλ):", self.spin_rebin_step)
         left_layout.addWidget(grp_rebin)
 
-        # 4. Interactive Telluric & Boundary Cutting
-        grp_cut = QGroupBox("4. Telluric & Boundary Cuts (Interactive)")
+        # 5. Telluric & Boundary Cuts (Interactive)
+        grp_cut = QGroupBox("5. Telluric & Boundary Cuts (Interactive)")
         f_cut = QVBoxLayout(grp_cut)
         f_cut.setSpacing(10)
 
@@ -326,6 +393,68 @@ class PreprocessingMixin:
                 self.statusBar().showMessage(f"🗑️ Cut removed at {x:.1f} Å.")
 
 
+    def _on_toggle_downgrade_res(self, checked):
+        if hasattr(self, 'w_downgrade_controls'):
+            self.w_downgrade_controls.setEnabled(checked)
+        self._on_preproc_param_changed()
+
+    def _on_res_mode_changed(self):
+        idx = self.combo_res_mode.currentIndex()
+        self.spin_res_ini.blockSignals(True)
+        self.spin_res_tgt.blockSignals(True)
+        if idx == 0:  # R = lambda / delta_lambda
+            self.spin_res_ini.setRange(10.0, 500000.0)
+            self.spin_res_ini.setValue(5000.0)
+            self.spin_res_ini.setSuffix("")
+            self.spin_res_tgt.setRange(10.0, 500000.0)
+            self.spin_res_tgt.setValue(2000.0)
+            self.spin_res_tgt.setSuffix("")
+        elif idx == 1:  # sigma (km/s)
+            self.spin_res_ini.setRange(0.1, 5000.0)
+            self.spin_res_ini.setValue(50.0)
+            self.spin_res_ini.setSuffix(" km/s")
+            self.spin_res_tgt.setRange(0.1, 5000.0)
+            self.spin_res_tgt.setValue(150.0)
+            self.spin_res_tgt.setSuffix(" km/s")
+        else:  # FWHM (Å)
+            self.spin_res_ini.setRange(0.01, 500.0)
+            self.spin_res_ini.setValue(1.0)
+            self.spin_res_ini.setSuffix(" Å")
+            self.spin_res_tgt.setRange(0.01, 500.0)
+            self.spin_res_tgt.setValue(2.5)
+            self.spin_res_tgt.setSuffix(" Å")
+        self.spin_res_ini.blockSignals(False)
+        self.spin_res_tgt.blockSignals(False)
+        self._on_preproc_param_changed()
+
+    def _on_browse_res_ini_file(self):
+        f, _ = QFileDialog.getOpenFileName(
+            self, "Select Initial Resolution Curve File", "", "Text/Data Files (*.txt *.dat *.csv);;All Files (*)"
+        )
+        if f:
+            self.res_ini_file_path = f
+            self.lbl_res_ini_file.setText(f"File: {os.path.basename(f)}")
+            self.spin_res_ini.setEnabled(False)
+        else:
+            self.res_ini_file_path = None
+            self.lbl_res_ini_file.setText("")
+            self.spin_res_ini.setEnabled(True)
+        self._on_preproc_param_changed()
+
+    def _on_browse_res_tgt_file(self):
+        f, _ = QFileDialog.getOpenFileName(
+            self, "Select Target Resolution Curve File", "", "Text/Data Files (*.txt *.dat *.csv);;All Files (*)"
+        )
+        if f:
+            self.res_tgt_file_path = f
+            self.lbl_res_tgt_file.setText(f"File: {os.path.basename(f)}")
+            self.spin_res_tgt.setEnabled(False)
+        else:
+            self.res_tgt_file_path = None
+            self.lbl_res_tgt_file.setText("")
+            self.spin_res_tgt.setEnabled(True)
+        self._on_preproc_param_changed()
+
     def _on_preproc_param_changed(self):
         if self.raw_wl is not None:
             self._run_preprocessing_internal(silent=True)
@@ -415,24 +544,43 @@ class PreprocessingMixin:
             return False
 
         try:
+            # 1. Downgrade Resolution if enabled
+            if hasattr(self, 'chk_downgrade_res') and self.chk_downgrade_res.isChecked():
+                idx = self.combo_res_mode.currentIndex()
+                mode_val = "R" if idx == 0 else ("sigma" if idx == 1 else "FWHM")
+                val_ini = self.spin_res_ini.value()
+                val_tgt = self.spin_res_tgt.value()
+                file_ini = getattr(self, "res_ini_file_path", None)
+                file_tgt = getattr(self, "res_tgt_file_path", None)
+
+                wl_init, flx_init, eflx_init = downgrade_resolution(
+                    self.raw_wl, self.raw_flux, eflux=self.raw_eflux,
+                    mode=mode_val, val_ini=val_ini, val_target=val_tgt,
+                    file_ini=file_ini, file_target=file_tgt
+                )
+            else:
+                wl_init = self.raw_wl
+                flx_init = self.raw_flux
+                eflx_init = self.raw_eflux
+
             z = self.spin_z.value()
             av = self.spin_av.value()
             rv = self.spin_rv.value()
             law = self.combo_law.currentText()
             step = self.spin_rebin_step.value()
 
-            # 1. Deredden
+            # 2. Deredden
             wl_d, flx_d, eflx_d = deredden(
-                self.raw_wl, self.raw_flux, eflux=self.raw_eflux,
+                wl_init, flx_init, eflux=eflx_init,
                 law=law, av=av, rv=rv
             )
 
-            # 2. Shift to rest frame
+            # 3. Shift to rest frame
             wl_curr = apply_redshift(wl_d, z)
             flx_curr = flx_d
             eflx_curr = eflx_d
 
-            # 3. Global boundary trimming if enabled
+            # 4. Global boundary trimming if enabled
             if self.chk_trim_bounds.isChecked():
                 w_min = self.spin_trim_min.value()
                 w_max = self.spin_trim_max.value()
@@ -446,12 +594,12 @@ class PreprocessingMixin:
                     raise ValueError("Too few valid data points remaining after cuts. Please adjust boundary limits.")
                 return False
 
-            # 4. Rebinning
+            # 5. Rebinning
             wl_reb, flx_reb, eflx_reb = rebin_spectrum(
                 wl_curr, flx_curr, eflux=eflx_curr, step=step
             )
 
-            # 5. Exclude telluric / interactive cut regions
+            # 6. Exclude telluric / interactive cut regions
             if self.telluric_cuts:
                 cut_intervals = [(c["low"], c["upp"]) for c in self.telluric_cuts]
                 wl_reb, flx_reb, eflx_reb = exclude_spectral_regions(

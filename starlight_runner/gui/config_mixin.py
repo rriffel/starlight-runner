@@ -47,6 +47,10 @@ class ConfigMixin:
                     "is_err_available": 1 if self.chk_err_spec.isChecked() else 0,
                     "is_flag_available": 1 if self.chk_flag_spec.isChecked() else 0,
                     "seed": self.spin_seed.value(),
+                    "downgrade_res_enabled": self.chk_downgrade_res.isChecked() if hasattr(self, 'chk_downgrade_res') else False,
+                    "res_mode": self.combo_res_mode.currentIndex() if hasattr(self, 'combo_res_mode') else 0,
+                    "res_ini": self.spin_res_ini.value() if hasattr(self, 'spin_res_ini') else 5000.0,
+                    "res_tgt": self.spin_res_tgt.value() if hasattr(self, 'spin_res_tgt') else 2000.0,
                     "z": self.spin_z.value(),
                     "law": self.combo_law.currentText(),
                     "av": self.spin_av.value(),
@@ -95,6 +99,15 @@ class ConfigMixin:
                 if "is_flag_available" in state: self.chk_flag_spec.setChecked(bool(state["is_flag_available"]))
                 if "seed" in state: self.spin_seed.setValue(state["seed"])
                 
+                if hasattr(self, 'chk_downgrade_res') and "downgrade_res_enabled" in state:
+                    self.chk_downgrade_res.setChecked(bool(state["downgrade_res_enabled"]))
+                if hasattr(self, 'combo_res_mode') and "res_mode" in state:
+                    self.combo_res_mode.setCurrentIndex(int(state["res_mode"]))
+                if hasattr(self, 'spin_res_ini') and "res_ini" in state:
+                    self.spin_res_ini.setValue(float(state["res_ini"]))
+                if hasattr(self, 'spin_res_tgt') and "res_tgt" in state:
+                    self.spin_res_tgt.setValue(float(state["res_tgt"]))
+
                 if "z" in state: self.spin_z.setValue(state["z"])
                 if "law" in state: self.combo_law.setCurrentText(state["law"])
                 if "av" in state: self.spin_av.setValue(state["av"])
