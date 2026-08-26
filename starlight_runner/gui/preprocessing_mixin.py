@@ -56,8 +56,40 @@ class PreprocessingMixin:
         f_load.addWidget(self.lbl_loaded_file)
         left_layout.addWidget(grp_load)
 
-        # 2. Downgrade Resolution Group
-        grp_downgrade = QGroupBox("2. Downgrade Resolution")
+        # 2. Physical Corrections Group
+        grp_corr = QGroupBox("2. Physical Corrections")
+        form_corr = QFormLayout(grp_corr)
+        form_corr.setSpacing(10)
+
+        self.spin_z = QDoubleSpinBox()
+        self.spin_z.setRange(0.0, 10.0)
+        self.spin_z.setDecimals(6)
+        self.spin_z.setSingleStep(0.001)
+        self.spin_z.setValue(0.0)
+        form_corr.addRow("Redshift (z):", self.spin_z)
+
+        self.combo_law = QComboBox()
+        for k in REDDENING_LAWS.keys():
+            self.combo_law.addItem(k)
+        form_corr.addRow("Extinction Law:", self.combo_law)
+
+        self.spin_av = QDoubleSpinBox()
+        self.spin_av.setRange(0.0, 20.0)
+        self.spin_av.setDecimals(4)
+        self.spin_av.setSingleStep(0.05)
+        self.spin_av.setValue(0.0)
+        form_corr.addRow("Extinction A_V (mag):", self.spin_av)
+
+        self.spin_rv = QDoubleSpinBox()
+        self.spin_rv.setRange(1.0, 10.0)
+        self.spin_rv.setDecimals(2)
+        self.spin_rv.setValue(3.1)
+        form_corr.addRow("R_V:", self.spin_rv)
+
+        left_layout.addWidget(grp_corr)
+
+        # 3. Downgrade Resolution Group (Optional)
+        grp_downgrade = QGroupBox("3. Downgrade Resolution (Optional)")
         f_downgrade = QVBoxLayout(grp_downgrade)
         f_downgrade.setSpacing(8)
 
@@ -121,38 +153,6 @@ class PreprocessingMixin:
         f_downgrade.addWidget(self.w_downgrade_controls)
         self.w_downgrade_controls.setEnabled(False)
         left_layout.addWidget(grp_downgrade)
-
-        # 3. Physical Corrections Group
-        grp_corr = QGroupBox("3. Physical Corrections")
-        form_corr = QFormLayout(grp_corr)
-        form_corr.setSpacing(10)
-
-        self.spin_z = QDoubleSpinBox()
-        self.spin_z.setRange(0.0, 10.0)
-        self.spin_z.setDecimals(6)
-        self.spin_z.setSingleStep(0.001)
-        self.spin_z.setValue(0.0)
-        form_corr.addRow("Redshift (z):", self.spin_z)
-
-        self.combo_law = QComboBox()
-        for k in REDDENING_LAWS.keys():
-            self.combo_law.addItem(k)
-        form_corr.addRow("Extinction Law:", self.combo_law)
-
-        self.spin_av = QDoubleSpinBox()
-        self.spin_av.setRange(0.0, 20.0)
-        self.spin_av.setDecimals(4)
-        self.spin_av.setSingleStep(0.05)
-        self.spin_av.setValue(0.0)
-        form_corr.addRow("Extinction A_V (mag):", self.spin_av)
-
-        self.spin_rv = QDoubleSpinBox()
-        self.spin_rv.setRange(1.0, 10.0)
-        self.spin_rv.setDecimals(2)
-        self.spin_rv.setValue(3.1)
-        form_corr.addRow("R_V:", self.spin_rv)
-
-        left_layout.addWidget(grp_corr)
 
         # 4. Rebinning Group
         grp_rebin = QGroupBox("4. Rebinning")
@@ -544,7 +544,24 @@ class PreprocessingMixin:
             return False
 
         try:
-            # 1. Downgrade Resolution if enabled
+            z = self.spin_z.value()
+            av = self.spin_av.value()
+            rv = self.spin_rv.value()
+            law = self.combo_law.currentText()
+            step = self.spin_rebin_step.value()
+
+            # 1. Physical Corrections: Deredden (Galactic Extinction)
+            wl_d, flx_d, eflx_d = deredden(
+                self.raw_wl, self.raw_flux, eflux=self.raw_eflux,
+                law=law, av=av, rv=rv
+            )
+
+            # 2. Shift to rest frame (redshift correction)
+            wl_rest = apply_redshift(wl_d, z)
+            flx_rest = flx_d
+            eflx_rest = eflx_d
+
+            # 3. Downgrade Resolution (Optional)
             if hasattr(self, 'chk_downgrade_res') and self.chk_downgrade_res.isChecked():
                 idx = self.combo_res_mode.currentIndex()
                 mode_val = "R" if idx == 0 else ("sigma" if idx == 1 else "FWHM")
@@ -553,32 +570,15 @@ class PreprocessingMixin:
                 file_ini = getattr(self, "res_ini_file_path", None)
                 file_tgt = getattr(self, "res_tgt_file_path", None)
 
-                wl_init, flx_init, eflx_init = downgrade_resolution(
-                    self.raw_wl, self.raw_flux, eflux=self.raw_eflux,
+                wl_curr, flx_curr, eflx_curr = downgrade_resolution(
+                    wl_rest, flx_rest, eflux=eflx_rest,
                     mode=mode_val, val_ini=val_ini, val_target=val_tgt,
                     file_ini=file_ini, file_target=file_tgt
                 )
             else:
-                wl_init = self.raw_wl
-                flx_init = self.raw_flux
-                eflx_init = self.raw_eflux
-
-            z = self.spin_z.value()
-            av = self.spin_av.value()
-            rv = self.spin_rv.value()
-            law = self.combo_law.currentText()
-            step = self.spin_rebin_step.value()
-
-            # 2. Deredden
-            wl_d, flx_d, eflx_d = deredden(
-                wl_init, flx_init, eflux=eflx_init,
-                law=law, av=av, rv=rv
-            )
-
-            # 3. Shift to rest frame
-            wl_curr = apply_redshift(wl_d, z)
-            flx_curr = flx_d
-            eflx_curr = eflx_d
+                wl_curr = wl_rest
+                flx_curr = flx_rest
+                eflx_curr = eflx_rest
 
             # 4. Global boundary trimming if enabled
             if self.chk_trim_bounds.isChecked():

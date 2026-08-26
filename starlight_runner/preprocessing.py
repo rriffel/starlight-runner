@@ -489,37 +489,52 @@ def preprocess_pipeline(
     ebv=None,
     rv=3.1,
     reddening_law="ccm",
+    downgrade_res_enabled=False,
+    res_mode="R",
+    res_val_ini=None,
+    res_val_target=None,
+    res_file_ini=None,
+    res_file_target=None,
     rebin_step=1.0,
     telluric_regions=None,
     output_spec_path=None
 ):
     """
     Complete high-level processing pipeline:
-    1. Load spectrum
-    2. Clean NaNs/Infs
-    3. Deredden (Galactic extinction)
-    4. Redshift correction (rest-frame)
-    5. Rebin to regular grid
-    6. Cut telluric windows (if specified)
-    7. Save to .spec (if path specified)
+    1. Load spectrum & clean NaNs/Infs
+    2. Physical corrections: Deredden (Galactic extinction) & Redshift correction (rest-frame)
+    3. Downgrade resolution (Optional: varsmooth Fourier convolution)
+    4. Rebin to regular grid
+    5. Cut telluric windows (if specified)
+    6. Save to .spec (if path specified)
     """
     raw_wl, raw_flx, raw_eflx = load_spectrum(filepath)
     wl_c, flx_c, eflx_c = clean_spectrum(raw_wl, raw_flx, raw_eflx)
     
-    # Dereddening
+    # 2. Physical Corrections: Dereddening
     wl_deredd, flx_deredd, eflx_deredd = deredden(
         wl_c, flx_c, eflux=eflx_c, law=reddening_law, av=av, ebv=ebv, rv=rv
     )
     
-    # Redshift
+    # Redshift (rest-frame shift)
     wl_rest = apply_redshift(wl_deredd, z)
+    flx_curr = flx_deredd
+    eflx_curr = eflx_deredd
+
+    # 3. Downgrade Resolution (Optional)
+    if downgrade_res_enabled:
+        wl_rest, flx_curr, eflx_curr = downgrade_resolution(
+            wl_rest, flx_curr, eflux=eflx_curr,
+            mode=res_mode, val_ini=res_val_ini, val_target=res_val_target,
+            file_ini=res_file_ini, file_target=res_file_target
+        )
     
-    # Rebin
+    # 4. Rebin
     wl_rebin, flx_rebin, eflx_rebin = rebin_spectrum(
-        wl_rest, flx_deredd, eflux=eflx_deredd, step=rebin_step
+        wl_rest, flx_curr, eflux=eflx_curr, step=rebin_step
     )
     
-    # Telluric cut
+    # 5. Telluric cut
     if telluric_regions is not None and len(telluric_regions) > 0:
         wl_final, flx_final, eflx_final = cut_spectral_regions(
             wl_rebin, flx_rebin, eflux=eflx_rebin, regions=telluric_regions
@@ -531,3 +546,4 @@ def preprocess_pipeline(
         save_spec_file(output_spec_path, wl_final, flx_final, eflx_final)
         
     return wl_final, flx_final, eflx_final
+

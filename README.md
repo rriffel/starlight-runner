@@ -102,21 +102,21 @@ python -m starlight_runner
 
 ### Step ① — Data Ingestion & Preprocessing
 1. **Load Spectrum:** Supports `.txt`, `.dat`, `.csv`, `.spec`, and `.fits` formats.
-2. **Downgrade Resolution (Spectral Smoothing):**
-   - Implements the analytic Fourier variable-dispersion Gaussian convolution algorithm (`varsmooth` / PACCE / Cappellari+22 / pPXF) with quadratic variance error propagation (Klein+21).
+2. **Physical Corrections:**
+   - **Extinction ($A_V, R_V$):** Applies dereddening using CCM89, Calzetti00, Fitzpatrick99, Seaton79, or Gordon24.
+   - **Redshift ($z$):** Corrects wavelengths to the rest frame: $\lambda_{\text{rest}} = \lambda_{\text{obs}} / (1 + z)$.
+3. **Downgrade Resolution (Optional Spectral Smoothing):**
+   - Implements the analytic Fourier variable-dispersion Gaussian convolution algorithm (`varsmooth` / PACCE / Cappellari+22 / pPXF) with quadratic variance error propagation (Klein+21) in the rest-frame.
    - Allows choosing between:
      - **Resolving Power ($R = \lambda / \Delta\lambda$)**
      - **Velocity Dispersion ($\sigma_{\text{inst}}$ in $\text{km/s}$)**
      - **$\text{FWHM}$ (in $\text{\AA}$)**
    - Supports both constant scalar resolution values and 2-column wavelength-dependent resolution curve files ($\lambda$ vs $R/\sigma/\text{FWHM}$).
-3. **Physical Corrections:**
-   - **Redshift ($z$):** Corrects wavelengths to the rest frame: $\lambda_{\text{rest}} = \lambda_{\text{obs}} / (1 + z)$.
-   - **Extinction ($A_V, R_V$):** Applies dereddening using CCM89, Calzetti00, Fitzpatrick99, Seaton79, or Gordon24.
-   - **Rebinning ($\Delta\lambda$):** Rebins fluxes and propagates errors onto a uniform integer or fractional linear grid (e.g. $\Delta\lambda = 1.0\text{ \AA}$) with automated deduplication.
-4. **Telluric & Boundary Trimming:**
+4. **Rebinning ($\Delta\lambda$):** Rebins fluxes and propagates errors onto a uniform integer or fractional linear grid (e.g. $\Delta\lambda = 1.0\text{ \AA}$) with automated deduplication.
+5. **Telluric & Boundary Trimming:**
    - **Interactive Cutting:** Click directly on the plot or open the *Detached Cut Window (Full Screen)* to trim telluric bands or extreme boundaries.
    - **NIR Preset:** One-click application of standard NIR telluric water vapor bands ($1.34 - 1.42\ \mu\text{m}$ and $1.80 - 1.90\ \mu\text{m}$).
-5. **Export:** Save cleaned `.spec` file and advance to Step 2.
+6. **Export:** Save cleaned `.spec` file and advance to Step 2.
 
 ---
 
