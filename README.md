@@ -35,12 +35,15 @@ conda activate starlight_env
 
 ### 2. Installing `starlight-runner`
 
-#### Option A: Direct Installation via `pip` (Fastest)
-Install the package directly from GitHub into your active environment:
-
-```bash
-pip install git+https://github.com/rriffel/starlight-runner.git
-```
+#### Option A: Direct Installation via `pip` (from GitHub)
+* **Public Repository (HTTPS):**
+  ```bash
+  pip install git+https://github.com/rriffel/starlight-runner.git
+  ```
+* **Private Repository or with SSH Key:**
+  ```bash
+  pip install git+ssh://git@github.com/rriffel/starlight-runner.git
+  ```
 
 #### Option B: Clone & Install in Editable / Development Mode
 If you want to access the example spectra (`testfiles/`), base templates (`starlight_stuff/`), or modify the source code:
