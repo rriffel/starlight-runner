@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="STARLIGHT-Runner" width="260">
+</p>
+
 # STARLIGHT-Runner
 
 A modern, high-performance workflow suite and graphical interface for the **STARLIGHT** Stellar Population Synthesis code.
@@ -222,6 +226,7 @@ print(f"Mean Z_L: {out.mean_z_l:.4f}")
 
 ```
 starlight-runner/
+├── logo.png                                      # Application logo
 ├── pyproject.toml                                # Package build specification (PEP 517/518)
 ├── requirements.txt                              # Core dependencies
 ├── README.md                                     # Project documentation
@@ -239,6 +244,7 @@ starlight-runner/
 └── starlight_runner/                             # Core Python package
     ├── __init__.py
     ├── __main__.py                               # Package entrypoint (python -m starlight_runner)
+    ├── assets/                                   # Icons and branding assets
     ├── main_gui.py                               # 4-step modern PyQt5 GUI application
     ├── custom_widgets.py                         # Detached studios, range widgets, plot canvases
     ├── preprocessing.py                          # Dereddening, rest-frame, linear rebinning
