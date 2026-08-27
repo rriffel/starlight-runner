@@ -33,7 +33,15 @@ conda activate starlight_env
 
 ---
 
-### 2. Installing `starlight-runner`
+### 2. STARLIGHT & SSP Base Libraries Requirement
+> [!IMPORTANT]
+> **STARLIGHT Executable & Base Spectra:**
+> * The **STARLIGHT** synthesis code is available for download at: [http://www.starlight.ufsc.br/downloads/](http://www.starlight.ufsc.br/downloads/).
+> * For **STARLIGHT** to function properly, the executable must be downloaded (or compiled) and the **stellar population base libraries** (SSP models) must be created or downloaded into your base library directory and referenced by your base file (e.g. `BasesXSLKrupaPCRR`).
+
+---
+
+### 3. Installing `starlight-runner`
 
 #### Option A: Direct Installation via `pip` (from GitHub)
 * **Public Repository (HTTPS):**
@@ -61,7 +69,7 @@ pip install -e .
 
 ---
 
-### 3. Dependencies
+### 4. Dependencies
 All required scientific packages (`numpy`, `scipy`, `pandas`, `matplotlib`, `PyQt5`) are resolved and installed automatically by `pip`. You can also manually install them via:
 
 ```bash
@@ -70,7 +78,7 @@ pip install -r requirements.txt
 
 ---
 
-### 4. Verify Installation
+### 5. Verify Installation
 To confirm everything is installed correctly, run the automated test suite directly inside your conda environment (from any directory):
 
 ```bash
@@ -136,10 +144,10 @@ python -m starlight_runner
 
 ### Step ③ — STARLIGHT Grid Generator & Parallel Execution
 1. **Configuration:**
-   - Select the STARLIGHT binary (`starlight_stuff/StarlightChains_v04RR_25klines_1000Base.exe`).
+   - Select the STARLIGHT binary (`starlight_stuff/StarlightChains_v04RR_25klines_1000Base.exe` or custom executable downloaded from [http://www.starlight.ufsc.br/downloads/](http://www.starlight.ufsc.br/downloads/)).
    - Choose observed spectra directory (e.g. `testfiles/`), mask directory, `.config` file (`starlight_stuff/StCv04.C99.config`), base library directory, and base file (`starlight_stuff/BasesXSLKrupaPCRR`).
 2. **Batch Grid Generation:** Automatically matches all spectrum files against corresponding masks and creates `grid_*.inp` files.
-3. **Base Library Verification:** Validates that all SSP FITS/text files referenced in the base file exist before launching.
+3. **Base Library Verification:** Validates that all SSP FITS/text files referenced in the base file exist before launching (downloaded or generated SSP base models).
 4. **Parallel Execution:**
    - Multi-process worker pool utilizing all available CPU cores.
    - Real-time log console streaming STARLIGHT output per grid.
@@ -254,7 +262,7 @@ starlight-runner/
 ## 👥 Authors & Scientific Citation
 
 * **Rogério Riffel** (riffel@ufrgs.br) — *Universidade Federal do Rio Grande do Sul (UFRGS), Departamento de Astronomia.*
-* **STARLIGHT** was developed by *Roberto Cid Fernandes and the SEAGal collaboration* (Cid Fernandes et al. 2005, MNRAS, 358, 363).
+* **STARLIGHT** was developed by *Roberto Cid Fernandes and the SEAGal collaboration* (Cid Fernandes et al. 2005, MNRAS, 358, 363). The official STARLIGHT code, base models, and documentation are available at [http://www.starlight.ufsc.br/downloads/](http://www.starlight.ufsc.br/downloads/).
 
 If you use this tool in your research, please cite the appropriate STARLIGHT and PyLight methodology papers.
 
