@@ -1,0 +1,81 @@
+Found 2 spectra matching '*.txt' in '/home/riffel/Dropbox/programas/Develp/starlight-runner/testfiles'
+FWHM not found in table
+sigma not found in table
+R not found in table
+z not found in table
+----------------------------
+Doing file comb_major_6.txt with error
+All indices plots saved in  ./allIndicesPlots/comb_major_6.txt/all_indices.png
+Failed to measure/plot index Ca4227: A value (4222.25) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index G4300: A value (4281.375) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe4383: A value (4369.125) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Ca4455: A value (4452.125) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe4531: A value (4514.25) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe4668: A value (4634.0) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe5015: A value (4977.75) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Mg1: A value (5069.125) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Mg2: A value (5154.125) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Mgb: A value (5160.125) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe5270: A value (5245.65) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe5335: A value (5312.125) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe5406: A value (5387.5) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe5709: A value (5696.625) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index Fe5782: A value (5776.625) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index NaD: A value (5876.875) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index TiO1: A value (5936.625) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index TiO2: A value (6189.625) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index CaT1: A value (8476.0) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index CaT2: A value (8520.0) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index CaT3: A value (8640.0) in x_new is below the interpolation range's minimum value (9280.0).
+Failed to measure/plot index ZrO: A value (9170.0) in x_new is below the interpolation range's minimum value (9280.0).
+----------------------------
+Doing file measurements.txt with error
+All indices plots saved in  ./allIndicesPlots/measurements.txt/all_indices.png
+Failed to measure/plot index Ca4227: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index G4300: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe4383: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Ca4455: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe4531: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe4668: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe5015: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Mg1: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Mg2: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Mgb: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe5270: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe5335: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe5406: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe5709: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index Fe5782: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index NaD: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index TiO1: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index TiO2: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CaT1: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CaT2: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CaT3: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index ZrO: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index VO: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CN11: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index NaI1.14: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index FeI1.16: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index MgI1.24: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index MnI1.29: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index AlI1.31: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index MgI1.48: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index MgI1.50: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO1.5a: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO1.5b: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index FeI1.58: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index SiI1.58: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO1.5c: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO1.6a: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO1.6b: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index MgI1.7: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index NaI2.20: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CaI2.26: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index MgI2.28: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO2.2: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO2.3a: zero-size array to reduction operation minimum which has no identity
+Failed to measure/plot index CO2.3b: zero-size array to reduction operation minimum which has no identity
+----------------------------
+No indices converted to mag
+No additional indices were calculated

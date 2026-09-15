@@ -71,6 +71,22 @@ class ResultsMixin:
         f_met.addRow("⟨Z_*⟩_M (Z_sun):", self.lbl_z_m)
         left_layout.addWidget(grp_metrics)
 
+        # Galaxy Distance input (needed for M* / SFR in V4 files)
+        grp_dist = QGroupBox("Galaxy Distance")
+        f_dist = QHBoxLayout(grp_dist)
+        f_dist.addWidget(QLabel("D (Mpc):"))
+        self.sb_gal_dist = QDoubleSpinBox()
+        self.sb_gal_dist.setRange(0, 1e6)
+        self.sb_gal_dist.setDecimals(4)
+        self.sb_gal_dist.setValue(0.0)
+        self.sb_gal_dist.setToolTip(
+            "Galaxy distance in Mpc.\n"
+            "For V5 files this is auto-filled from LumDistInMpc.\n"
+            "For V4 files you must set it manually to get correct M* and SFR."
+        )
+        f_dist.addWidget(self.sb_gal_dist)
+        left_layout.addWidget(grp_dist)
+
         # Pylight Configuration
         grp_config = QGroupBox("3. Pylight Configuration")
         f_config = QVBoxLayout(grp_config)
@@ -139,21 +155,20 @@ class ResultsMixin:
             pars, ParList, popin, popend, syntin, version = starlightPars(filepath)
             pop, popComps = popVectors(filepath)
             spec = StSyntesis(filepath)
-            
-            # Save raw arrays so _plot_results can use them
+
+            # Save raw arrays so _plot_results and _on_export_table can use them
             self.parsed_output = {
                 'pars': pars,
                 'ParList': ParList,
                 'pop': pop,
                 'popComps': popComps,
                 'spec': spec,
-                'filename': os.path.basename(filepath)
+                'filename': os.path.basename(filepath),
+                'version': version,
             }
             self.lbl_out_file.setText(os.path.basename(filepath))
 
             # Map parameters by name from ParList
-            # ParList in V5 is e.g., ['[chi2/Nl_eff', 'chi2]', 'flux_unit]', 'fobs_norm', 'Lobs_norm', 'LumDistInMpc', '[adev (%)]', ...]
-            # We find the indices dynamically
             def get_par(name):
                 for i, p in enumerate(ParList):
                     if name in p: return pars[i]
@@ -167,6 +182,27 @@ class ResultsMixin:
             v0 = get_par('v0_min')
             vd = get_par('vd_min')
 
+            # Store version-specific parameters for CSV export
+            if version == 'V5':
+                fobs_norm = get_par('fobs_norm')
+                lum_dist = get_par('LumDistInMpc')
+                Mini_t = get_par('Mini_tot')
+                Mcor_t = get_par('Mcor_tot')
+                self.parsed_output['fobs_norm'] = fobs_norm
+                self.parsed_output['Mini_t'] = Mini_t
+                self.parsed_output['Mcor_t'] = Mcor_t
+                self.parsed_output['LumDistInMpc'] = lum_dist
+                # Auto-fill distance for V5 files
+                if not np.isnan(lum_dist) and lum_dist > 0:
+                    self.sb_gal_dist.setValue(lum_dist)
+            else:  # V4
+                fobs_norm = get_par('fobs_norm (in input units)')
+                Mini_tot = get_par('Mini_tot')
+                Mcor_tot = get_par('Mcor_tot')
+                self.parsed_output['fobs_norm'] = fobs_norm
+                self.parsed_output['Mini_tot_raw'] = Mini_tot
+                self.parsed_output['Mcor_tot_raw'] = Mcor_tot
+
             # Calculate mean ages and metallicities from pop arrays
             # pop columns: 0=x_j(%), 1=Mini_j(%), 2=Mcor_j(%), 3=age_j(yr), 4=Z_j, 5=(L/M)_j, 6=j
             x_j = pop[:, 0]
@@ -174,13 +210,13 @@ class ResultsMixin:
             age_yr = pop[:, 3]
             log_age = np.log10(np.where(age_yr > 0, age_yr, 1))
             Z_j = pop[:, 4]
-            
+
             tot_x = np.sum(x_j)
             tot_m = np.sum(mcor_j)
-            
+
             mean_log_age_l = np.sum(x_j * log_age) / tot_x if tot_x > 0 else np.nan
             mean_z_l = np.sum(x_j * Z_j) / tot_x if tot_x > 0 else np.nan
-            
+
             mean_log_age_m = np.sum(mcor_j * log_age) / tot_m if tot_m > 0 else np.nan
             mean_z_m = np.sum(mcor_j * Z_j) / tot_m if tot_m > 0 else np.nan
 
@@ -457,38 +493,228 @@ class ResultsMixin:
                 QMessageBox.critical(self, "Error Saving Figure", f"Failed to save figure:\n{str(e)}")
 
     def _on_export_table(self):
+        """Export CSV with all pylight-derived quantities, matching the original pylight.py output format."""
         if self.parsed_output is None:
             QMessageBox.warning(self, "No Fit Loaded", "Please load a .out file first.")
             return
 
-        filename = self.parsed_output.get('filename', 'fit.out') if isinstance(self.parsed_output, dict) else getattr(self.parsed_output, 'filename', 'fit.out')
+        data = self.parsed_output
+        filename = data.get('filename', 'fit.out')
         base_name = os.path.splitext(filename)[0]
+        config = self.pylight_config
+        version = data.get('version', 'V4')
 
         out_path, _ = QFileDialog.getSaveFileName(
             self, "Save Parameters Table", f"{base_name}_summary.csv",
             "CSV Table (*.csv);;TXT Table (*.txt);;All Files (*)"
         )
-        if out_path:
-            try:
-                import pandas as pd
-                # Make a simple dict out of pars
-                if isinstance(self.parsed_output, dict):
-                    out_d = {'file': filename}
-                    par_list = self.parsed_output.get('ParList', [])
-                    pars = self.parsed_output.get('pars', [])
-                    for i, p in enumerate(par_list):
-                        if i < len(pars):
-                            out_d[p] = pars[i]
-                    df = pd.DataFrame([out_d])
-                else:
-                    df = pd.DataFrame([{'file': filename}])
+        if not out_path:
+            return
 
-                if out_path.endswith('.txt'):
-                    df.to_csv(out_path, sep='\t', index=False)
+        try:
+            pop = data['pop']
+            popComps = data.get('popComps', np.array([]))
+            pars = data['pars']
+            ParList = data['ParList']
+
+            # Helper to look up a parameter by name
+            def get_par(name):
+                for i, p in enumerate(ParList):
+                    if name in p and i < len(pars):
+                        return pars[i]
+                return np.nan
+
+            # --- Population vectors (renormalized to 100%) ---
+            x_j = pop[:, 0]
+            popMi = pop[:, 1]
+            mcor_j = pop[:, 2]
+            age_yr = pop[:, 3]
+            Z_j = pop[:, 4]
+            components = popComps
+
+            popx = x_j * (100.0 / np.sum(x_j)) if np.sum(x_j) > 0 else x_j
+            popm = mcor_j * (100.0 / np.sum(mcor_j)) if np.sum(mcor_j) > 0 else mcor_j
+            popMi_norm = popMi * (100.0 / np.sum(popMi)) if np.sum(popMi) > 0 else popMi
+
+            # --- Fit parameters ---
+            chi2 = get_par('chi2/Nl_eff')
+            if np.isnan(chi2):
+                chi2 = get_par('chi2]')
+            adev = get_par('adev')
+            snr = get_par('S/N in S/N window')
+            av = get_par('AV_min')
+            fobs_norm = data.get('fobs_norm', get_par('fobs_norm'))
+
+            # --- Galaxy distance and stellar masses ---
+            gal_D = self.sb_gal_dist.value()
+            gd = 3.08567758e24 * gal_D  # Mpc -> cm
+            NormFac = config.get('NormFac', 1.0)
+
+            if version == 'V5':
+                Mini_t = data.get('Mini_t', np.nan)
+                Mcor_t = data.get('Mcor_t', np.nan)
+            else:  # V4
+                Mini_tot_raw = data.get('Mini_tot_raw', get_par('Mini_tot'))
+                Mcor_tot_raw = data.get('Mcor_tot_raw', get_par('Mcor_tot'))
+                if gal_D > 0:
+                    Mini_t = NormFac * (Mini_tot_raw * 4.0 * np.pi) * gd**2 / 3.826e33
+                    Mcor_t = NormFac * (Mcor_tot_raw * 4.0 * np.pi) * gd**2 / 3.826e33
                 else:
-                    df.to_csv(out_path, index=False)
-                QMessageBox.information(self, "Table Saved", f"Saved: {out_path}")
-            except Exception as e:
-                QMessageBox.critical(self, "Error Saving Table", f"Failed to save table:\n{str(e)}")
+                    Mini_t = np.nan
+                    Mcor_t = np.nan
+
+            # --- Mean ages and metallicities (excluding AGN components) ---
+            sumvec = []
+            for idx_c, comp in enumerate(components):
+                comp_str = str(comp)
+                if 'BB_' not in comp_str and 'Power' not in comp_str:
+                    sumvec.append(idx_c)
+            sumvec = np.array(sumvec, dtype=int) if len(sumvec) > 0 else np.arange(len(popx))
+
+            log_age = np.log10(np.where(age_yr > 0, age_yr, 1))
+            px_s = popx[sumvec]
+            pm_s = popm[sumvec]
+            la_s = log_age[sumvec]
+            z_s = Z_j[sumvec]
+
+            sum_px_s = np.sum(px_s)
+            sum_pm_s = np.sum(pm_s)
+            meanAgex = np.sum((px_s / sum_px_s) * la_s) if sum_px_s > 0 else np.nan
+            meanZx = np.sum((px_s / sum_px_s) * z_s) if sum_px_s > 0 else np.nan
+            meanAgem = np.sum((pm_s / sum_pm_s) * la_s) if sum_pm_s > 0 else np.nan
+            meanZm = np.sum((pm_s / sum_pm_s) * z_s) if sum_pm_s > 0 else np.nan
+
+            # === Build the output row in pylight order ===
+            # Formatting conventions from pylight.py:
+            #   formf = '{:.2F}'  → fractions, Av, ages, adev, chi2, SNR, GalDist
+            #   forme = '{:.2E}'  → M*, M*in, SFR, F_Norm
+            #   '{:.4}'           → metallicities (4 significant figures)
+            def formf(v):
+                """Format like pylight formf: 2 decimal places."""
+                return f'{v:.2f}' if not np.isnan(v) else 'NaN'
+
+            def forme(v):
+                """Format like pylight forme: scientific notation, 2 decimal places."""
+                return f'{v:.2E}' if not np.isnan(v) else 'NaN'
+
+            def formz(v):
+                """Format like pylight metallicity: 4 significant figures."""
+                return f'{v:.4}' if not np.isnan(v) else 'NaN'
+
+            out_d = {'File': filename}
+
+            # --- AGN FC bins (if configured) ---
+            if config.get('IsAGNComp', False):
+                # Identify FC (Power law) components
+                nu_vals = []
+                fcind = []
+                for idx_c, comp in enumerate(components):
+                    comp_str = str(comp)
+                    if 'Power' in comp_str:
+                        ptmp = re.split(r'_', comp_str)
+                        try:
+                            nui = float(ptmp[1]) / 100.0
+                        except (IndexError, ValueError):
+                            match = re.search(r'[\d\.]+', comp_str)
+                            nui = float(match.group()) / 100.0 if match else 0
+                        nu_vals.append(nui)
+                        fcind.append(idx_c)
+                nu_vals = np.array(nu_vals)
+
+                for fc_label in config.get('BinFCVecLab', []):
+                    bounds = config.get('BinFCVec', {}).get(fc_label, [0, 0])
+                    if len(fcind) > 0:
+                        fc_mask = (nu_vals > bounds[0]) & (nu_vals <= bounds[1])
+                        val = np.sum(popx[fcind][fc_mask]) if np.any(fc_mask) else 0.0
+                    else:
+                        val = 0.0
+                    out_d[fc_label] = formf(val)
+
+                # Identify BB (Hot Dust) components
+                bb_vals = []
+                hdind = []
+                for idx_c, comp in enumerate(components):
+                    comp_str = str(comp)
+                    if 'BB_' in comp_str:
+                        ptmp = re.split(r'_', comp_str)
+                        try:
+                            bbi = float(ptmp[1])
+                        except (IndexError, ValueError):
+                            match = re.search(r'[\d\.]+', comp_str)
+                            bbi = float(match.group()) if match else 0
+                        bb_vals.append(bbi)
+                        hdind.append(idx_c)
+                bb_vals = np.array(bb_vals)
+
+                for hd_label in config.get('BinHDVecLab', []):
+                    bounds = config.get('BinHDVec', {}).get(hd_label, [0, 0])
+                    if len(hdind) > 0:
+                        hd_mask = (bb_vals > bounds[0]) & (bb_vals <= bounds[1])
+                        val = np.sum(popx[hdind][hd_mask]) if np.any(hd_mask) else 0.0
+                    else:
+                        val = 0.0
+                    out_d[hd_label] = formf(val)
+
+            # --- Binned population vectors (Light fractions) — formf ---
+            bin_pop_vec = config.get('BinPopVec', {})
+            for label in config.get('BinPopVecLab', list(bin_pop_vec.keys())):
+                bounds = bin_pop_vec.get(label, [0, 0])
+                mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
+                out_d[label] = formf(np.sum(popx[mask]))
+
+            # --- Binned population vectors (Mass fractions) — formf ---
+            for label in config.get('BinPopVecMassLab', []):
+                pop_labels = config.get('BinPopVecLab', list(bin_pop_vec.keys()))
+                idx_m = config.get('BinPopVecMassLab', []).index(label)
+                if idx_m < len(pop_labels):
+                    corr_pop_label = pop_labels[idx_m]
+                    bounds = bin_pop_vec.get(corr_pop_label, [0, 0])
+                else:
+                    bounds = [0, 0]
+                mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
+                out_d[label] = formf(np.sum(popm[mask]))
+
+            # --- Physical properties ---
+            out_d['Av'] = formf(av)                  # formf
+            out_d['Mage_L'] = formf(meanAgex)        # formf
+            out_d['Mage_M'] = formf(meanAgem)        # formf
+            out_d['MZ_L'] = formz(meanZx)            # 4 sig figs
+            out_d['MZ_M'] = formz(meanZm)            # 4 sig figs
+            out_d['M*'] = forme(Mcor_t)              # forme (scientific)
+            out_d['M*in'] = forme(Mini_t)            # forme (scientific)
+
+            # --- SFR bins — forme (scientific) ---
+            bin_sfr = config.get('BinSFR', {})
+            for sfr_label in config.get('BinSFRLabs', list(bin_sfr.keys())):
+                bounds = bin_sfr.get(sfr_label, [0, 0])
+                mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
+                SFR_t = np.sum(popMi_norm[mask])
+                SF = bounds[1] - bounds[0]
+                if SF > 0 and not np.isnan(Mini_t):
+                    out_d[sfr_label] = forme(((SFR_t / 100.0) * Mini_t) / SF)
+                else:
+                    out_d[sfr_label] = 'NaN'
+
+            # --- Fit quality ---
+            out_d['F_Norm'] = forme(fobs_norm)       # forme (scientific)
+            out_d['Adev'] = formf(adev)              # formf
+            out_d['ChiSqrt'] = formf(chi2)           # formf
+            out_d['SNR'] = formf(snr)                # formf
+
+            # --- Galaxy distance (optional) — formf ---
+            if config.get('SaveDist', True):
+                out_d['GalDist'] = formf(gal_D)
+
+            # Build and save DataFrame
+            df = pd.DataFrame([out_d])
+
+            if out_path.endswith('.txt'):
+                df.to_csv(out_path, sep='\t', index=False)
+            else:
+                df.to_csv(out_path, index=False)
+
+            QMessageBox.information(self, "Table Saved", f"Saved: {out_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error Saving Table", f"Failed to save table:\n{str(e)}\n{traceback.format_exc()}")
 
 

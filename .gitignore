@@ -48,3 +48,4 @@ starlight_gui_config*.json
 
 # Backup directory
 backup/
+running_tests/
