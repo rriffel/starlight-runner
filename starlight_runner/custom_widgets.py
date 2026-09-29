@@ -15,7 +15,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from .masking import SpectralMask
-from .gui.constants import STYLESHEET
+from .gui import constants
 
 
 class DoubleSlider(QWidget):
@@ -91,7 +91,7 @@ class DoubleSlider(QWidget):
             self._track_height
         )
         painter.setPen(Qt.NoPen)
-        painter.setBrush(QBrush(QColor("#E2E8F0")))
+        painter.setBrush(QBrush(QColor(constants.SLIDER_TRACK)))
         painter.drawRoundedRect(track_rect, self._track_height / 2.0, self._track_height / 2.0)
         
         # Draw active highlighted track between handles
@@ -101,12 +101,12 @@ class DoubleSlider(QWidget):
             max(0.0, x_high - x_low),
             self._track_height
         )
-        painter.setBrush(QBrush(QColor("#2563EB")))
+        painter.setBrush(QBrush(QColor(constants.ACCENT)))
         painter.drawRoundedRect(active_rect, self._track_height / 2.0, self._track_height / 2.0)
         
         # Draw Low Handle
-        painter.setPen(QPen(QColor("#1D4ED8"), 2))
-        painter.setBrush(QBrush(QColor("#FFFFFF")))
+        painter.setPen(QPen(QColor(constants.ACCENT_HOVER), 2))
+        painter.setBrush(QBrush(QColor(constants.SLIDER_HANDLE)))
         painter.drawEllipse(QRectF(
             x_low - self._handle_radius,
             y_center - self._handle_radius,
@@ -174,9 +174,10 @@ class VisualRangeSlider(QWidget):
         
         header = QHBoxLayout()
         self.lbl_title = QLabel(title)
-        self.lbl_title.setStyleSheet("font-weight: 600; color: #334155;")
+        self.lbl_title.setStyleSheet("font-weight: 600;")
         self.lbl_values = QLabel(f"{min_val:.0f} - {max_val:.0f} {unit}")
-        self.lbl_values.setStyleSheet("color: #2563EB; font-weight: 600;")
+        self.lbl_values.setProperty("role", "accentLabel")
+        self.lbl_values.setStyleSheet("font-weight: 600;")
         
         header.addWidget(self.lbl_title)
         header.addStretch()
@@ -206,19 +207,7 @@ class CollapsibleBox(QWidget):
     def __init__(self, title="", parent=None):
         super().__init__(parent)
         self.toggle_button = QToolButton(self)
-        self.toggle_button.setStyleSheet("""
-            QToolButton {
-                border: none;
-                font-weight: bold;
-                font-size: 13px;
-                color: #1E293B;
-                background-color: transparent;
-                padding: 6px;
-            }
-            QToolButton:hover {
-                color: #2563EB;
-            }
-        """)
+        self.toggle_button.setProperty("role", "collapsibleHeader")
         self.toggle_button.setText(f"▼  {title}")
         self.toggle_button.setCheckable(True)
         self.toggle_button.setChecked(True)
@@ -523,7 +512,6 @@ class InteractiveMaskDialog(QDialog):
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
         self.setWindowTitle("STARLIGHT — Interactive Mask Studio (CreateMasks Mode)")
         self.resize(1300, 850)
-        self.setStyleSheet(STYLESHEET)
 
         self.wl = wl
         self.flux = flux
@@ -612,7 +600,8 @@ class InteractiveMaskDialog(QDialog):
             "<b>Key 'd'</b>: Deletes mask region under cursor  |  "
             "<b>Key 'q' / 'Esc'</b>: Finish & close window"
         )
-        info_banner.setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 10px; color: #334155; font-size: 12px;")
+        info_banner.setProperty("role", "infoBanner")
+        info_banner.setStyleSheet("padding: 6px 10px; font-size: 12px;")
         main_layout.addWidget(info_banner)
 
         # Horizontal Splitter: Table (left) + Large Plot (right)
@@ -624,7 +613,7 @@ class InteractiveMaskDialog(QDialog):
         tbl_layout.setSpacing(6)
 
         tbl_title = QLabel("Masked Regions")
-        tbl_title.setStyleSheet("font-weight: bold; color: #1E293B; font-size: 12px;")
+        tbl_title.setStyleSheet("font-weight: bold; font-size: 12px;")
         tbl_layout.addWidget(tbl_title)
 
         self.tbl_masks = QTableWidget(0, 3)
@@ -663,7 +652,8 @@ class InteractiveMaskDialog(QDialog):
         main_layout.addWidget(splitter, 1)
 
         self.lbl_status = QLabel("Ready to mask. Click on line extremes or use right-click.")
-        self.lbl_status.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 500;")
+        self.lbl_status.setProperty("role", "mutedLabel")
+        self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 500;")
         main_layout.addWidget(self.lbl_status)
 
         self._update_table()
@@ -860,7 +850,6 @@ class InteractiveCutDialog(QDialog):
         self.setWindowFlags(Qt.Window | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
         self.setWindowTitle("STARLIGHT — Interactive Trimming (Telluric / Extremities)")
         self.resize(1300, 800)
-        self.setStyleSheet(STYLESHEET)
 
         self.raw_wl = raw_wl
         self.raw_flux = raw_flux
@@ -903,7 +892,8 @@ class InteractiveCutDialog(QDialog):
             "<b>Key 'd'</b>: Removes cut region under cursor  |  "
             "<b>Key 'q' / 'Esc'</b>: Finish & close window"
         )
-        info_banner.setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px 10px; color: #334155; font-size: 12px;")
+        info_banner.setProperty("role", "infoBanner")
+        info_banner.setStyleSheet("padding: 6px 10px; font-size: 12px;")
         main_layout.addWidget(info_banner)
 
         plot_container = QWidget()
@@ -924,7 +914,8 @@ class InteractiveCutDialog(QDialog):
         main_layout.addWidget(plot_container, 1)
 
         self.lbl_status = QLabel("Click 1st point to start cutting.")
-        self.lbl_status.setStyleSheet("color: #64748B; font-size: 11px; font-weight: 500;")
+        self.lbl_status.setProperty("role", "mutedLabel")
+        self.lbl_status.setStyleSheet("font-size: 11px; font-weight: 500;")
         main_layout.addWidget(self.lbl_status)
 
     def _clear_cuts(self):

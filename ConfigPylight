@@ -1,0 +1,67 @@
+datafile='teste.txt'
+
+outfile='simulated_CTRLNIR_props.dat'
+
+Zs=[0.00382, 0.00959, 0.0152 , 0.02409] # Metallicity array.  Be carrefull original base has 0.0001, wich in turn is 0.0004.
+
+inter = True# If you are running the code in the Ipython, use True or False, without ''
+
+doPlots=False 
+
+figext='.pdf' # If do plots yes, you can choose the extension of the output plots.
+
+figsdir='./figs_sample/'  #Dir to store the figures. It need the ./ and / 
+
+MakeMovie=False # Make movie of the plots
+
+MovieName='teste.avi' # If MakeMovie = yes, insert the movie name
+
+SaveResidual= False # save the residual spectrum, multiplied by the normalization flux.
+
+cutAgeIntMass = 2E9
+
+IsAGNComp= True # If there is the AGN component and you wants to show it in the plots. If you set it as no, the population vectors will not be extracted.
+OnlyFC = False
+pltmask= False # Overplot the mask/cliped points to the observed spectrum.
+
+datacube= False # if you are you analysis a datacube. In that case set xcol and ycols
+
+xcol=3  # xcol = ncols - 1, it starts with 0
+ycol=4  # ycol = ncols - 1, it starts with 0
+
+#SFR = 1E8 # SFR over the last XX years.
+
+NormFac = 1 # Normalization Factor if none, = 1
+
+SaveDist = True # Save Galaxy distance 
+
+FramesSecond = 1 # Number of frames per second 
+#BinSFR={'SFRxy':[1E1, 100e6],'SFRxyi': [110e6,700e6],'SFRxio':[750E6,2E9],'SFRxo':[2.10e9,15e9]}
+BinSFRLabs=['SFR_1E6','SFR_5E6','SFR_10E6','SFR_14E6','SFR_20E6','SFR_30E6','SFR_56E6','SFR_100E6','SFR_200E6']
+#SFR=[20E6,100E6,500E6,1E9,5E9,13E9]
+BinSFR = {"SFR_1E6": [10,1.001E6], "SFR_5E6": [10,5.621E6], "SFR_10E6": [10,10.001E6],"SFR_14E6":[10,14.1001E6],"SFR_20E6": [10,20.001E6],"SFR_30E6": [10,31.6001E6],"SFR_56E6": [10,56.201E6],"SFR_100E6":[10,100.001E6],"SFR_200E6": [10,200.001E6]}
+StOutFromList = False
+
+zsun = 0.0152 # form parsec paper Bressan+ doi:10.1111/j.1365-2966.2012.21948.x
+
+###################################################################################
+#                                                                                 #
+#        Only edit the following lines if you know what you are doing             #
+#                                                                                 #
+###################################################################################
+
+# population vectors intervals. Sintax used x0 < xvec <= x1, the last is included 
+
+BinPopVecMassLab=['my','miy','mio','mo'] # Labels for the plot needs to follow the names for the library below.
+BinPopVecLab=['xy','xiy','xio','xo'] # needs to be the same as below. 
+BinPopVec={'xy':[1E3, 100e6],'xiy': [101e6,700e6],'xio':[750E6,2E9],'xo':[2.10e9,15e9]}  # Insert the intervals, you can add more. 
+
+
+# hot dust intervals Same idea as population vectors
+BinHDVecLab=['BB_c','BB_h','HDTot']
+BinHDVec={'BB_c':[0, 1000],'BB_h':[1000,1500],'HDTot':[0,1500]}
+
+# hot dust intervals 
+BinFCVecLab=['FC1.25','FC1.50', 'FC1.75', 'FCTot']
+BinFCVec={'FC1.25':[0, 1.25],'FC1.50':[1.26,1.50],'FC1.75':[1.51,1.75], 'FCTot':[0,1.76]}
+

@@ -33,11 +33,8 @@ from matplotlib.figure import Figure
 from .masking import SpectralMask
 from .runner import StarlightConfig
 
-# Shared styling constants
-from .gui.constants import (
-    ACCENT, ACCENT_HOVER, DARK_BG, CARD_BG, TEXT_COLOR,
-    MUTED, BORDER_COLOR, SUCCESS_COLOR, DANGER_COLOR, STYLESHEET
-)
+# Shared styling constants & light/dark theming
+from .gui import constants
 
 # Mixin classes (each implements one tab/step)
 from .gui.preprocessing_mixin import PreprocessingMixin
@@ -96,7 +93,7 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
 
 
         self.resize(1350, 900)
-        self.setStyleSheet(STYLESHEET)
+        constants.apply_theme(QApplication.instance())
 
         # State variables
         self.current_spectrum_path = None
@@ -161,16 +158,19 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
     def _create_sidebar(self):
         sidebar = QWidget()
         sidebar.setFixedWidth(240)
-        sidebar.setStyleSheet(f"background-color: {CARD_BG}; border-right: 1px solid {BORDER_COLOR};")
+        sidebar.setAttribute(Qt.WA_StyledBackground, True)
+        sidebar.setProperty("role", "sidebar")
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(12, 20, 12, 20)
         layout.setSpacing(8)
 
         # App Title
         title_label = QLabel("STARLIGHT")
-        title_label.setStyleSheet(f"font-size: 18px; font-weight: 800; color: {ACCENT}; margin-bottom: 2px;")
+        title_label.setProperty("role", "accentLabel")
+        title_label.setStyleSheet("font-size: 18px; font-weight: 800; margin-bottom: 2px;")
         sub_label = QLabel("Runner & Analyser v1.0")
-        sub_label.setStyleSheet(f"font-size: 11px; color: {MUTED}; margin-bottom: 8px;")
+        sub_label.setProperty("role", "mutedLabel")
+        sub_label.setStyleSheet("font-size: 11px; margin-bottom: 8px;")
         layout.addWidget(title_label)
         layout.addWidget(sub_label)
 
@@ -207,29 +207,48 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
 
         # Global Config Buttons (Moved up so they don't get clipped on small screens)
         lbl_cfg = QLabel("Global Configuration")
-        lbl_cfg.setStyleSheet(f"color: {ACCENT}; font-size: 11px; font-weight: bold; margin-bottom: 2px;")
+        lbl_cfg.setProperty("role", "accentLabel")
+        lbl_cfg.setStyleSheet("font-size: 11px; font-weight: bold; margin-bottom: 2px;")
         layout.addWidget(lbl_cfg)
         
         btn_load_cfg = QPushButton("Load Config State")
-        btn_load_cfg.setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px; color: #334155;")
+        btn_load_cfg.setProperty("role", "secondaryBtn")
         btn_load_cfg.setCursor(Qt.PointingHandCursor)
         btn_load_cfg.clicked.connect(self._on_load_config_state)
         layout.addWidget(btn_load_cfg)
         
         btn_save_cfg = QPushButton("Save Config State")
-        btn_save_cfg.setStyleSheet("background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 6px; padding: 6px; color: #334155;")
+        btn_save_cfg.setProperty("role", "secondaryBtn")
         btn_save_cfg.setCursor(Qt.PointingHandCursor)
         btn_save_cfg.clicked.connect(self._on_save_config_state)
         layout.addWidget(btn_save_cfg)
+
+        layout.addSpacing(12)
+
+        # Appearance
+        lbl_appearance = QLabel("Appearance")
+        lbl_appearance.setProperty("role", "accentLabel")
+        lbl_appearance.setStyleSheet("font-size: 11px; font-weight: bold; margin-bottom: 2px;")
+        layout.addWidget(lbl_appearance)
+
+        self.chk_dark_mode = QCheckBox("  Dark Mode")
+        self.chk_dark_mode.setChecked(constants.is_dark())
+        self.chk_dark_mode.toggled.connect(self._on_toggle_theme)
+        layout.addWidget(self.chk_dark_mode)
 
         layout.addStretch()
 
         # Footer info
         footer = QLabel("Rogério Riffel\nUFRGS / Depto Astronomia")
-        footer.setStyleSheet(f"color: {MUTED}; font-size: 11px; line-height: 1.4;")
+        footer.setProperty("role", "mutedLabel")
+        footer.setStyleSheet("font-size: 11px; line-height: 1.4;")
         layout.addWidget(footer)
 
         return sidebar
+
+    def _on_toggle_theme(self, checked):
+        """Switch between light and dark mode."""
+        constants.apply_theme(QApplication.instance(), dark=checked)
 
     def set_active_page(self, index):
         prev_index = self.pages.currentIndex()

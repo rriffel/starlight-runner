@@ -12,10 +12,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
-from .constants import (
-    ACCENT, ACCENT_HOVER, DARK_BG, CARD_BG, TEXT_COLOR,
-    MUTED, BORDER_COLOR, SUCCESS_COLOR, DANGER_COLOR, STYLESHEET
-)
+from . import constants
 
 from ..pylight_reader import starlightPars, popVectors, StSyntesis
 from ..custom_widgets import PylightConfigDialog
@@ -40,7 +37,8 @@ class ResultsMixin:
         btn_open_out = QPushButton("Open Result (.out)")
         btn_open_out.clicked.connect(self._on_open_out_dialog)
         self.lbl_out_file = QLabel("No fit loaded")
-        self.lbl_out_file.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        self.lbl_out_file.setProperty("role", "mutedLabel")
+        self.lbl_out_file.setStyleSheet("font-size: 11px;")
         f_out.addWidget(btn_open_out)
         f_out.addWidget(self.lbl_out_file)
         left_layout.addWidget(grp_out)

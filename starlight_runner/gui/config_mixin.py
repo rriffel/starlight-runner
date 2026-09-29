@@ -12,10 +12,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
-from .constants import (
-    ACCENT, ACCENT_HOVER, DARK_BG, CARD_BG, TEXT_COLOR,
-    MUTED, BORDER_COLOR, SUCCESS_COLOR, DANGER_COLOR, STYLESHEET
-)
+from . import constants
 
 from ..masking import SpectralMask
 

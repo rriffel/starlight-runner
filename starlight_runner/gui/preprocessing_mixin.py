@@ -12,10 +12,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
-from .constants import (
-    ACCENT, ACCENT_HOVER, DARK_BG, CARD_BG, TEXT_COLOR,
-    MUTED, BORDER_COLOR, SUCCESS_COLOR, DANGER_COLOR, STYLESHEET
-)
+from . import constants
 
 from ..reddening import REDDENING_LAWS, deredden
 from ..preprocessing import (
@@ -51,7 +48,8 @@ class PreprocessingMixin:
         btn_open = QPushButton("Load Spectrum (.txt, .spec, .fits)")
         btn_open.clicked.connect(self._on_load_spectrum_dialog)
         self.lbl_loaded_file = QLabel("No file loaded")
-        self.lbl_loaded_file.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        self.lbl_loaded_file.setProperty("role", "mutedLabel")
+        self.lbl_loaded_file.setStyleSheet("font-size: 11px;")
         f_load.addWidget(btn_open)
         f_load.addWidget(self.lbl_loaded_file)
         left_layout.addWidget(grp_load)
@@ -94,7 +92,7 @@ class PreprocessingMixin:
         f_downgrade.setSpacing(8)
 
         self.chk_downgrade_res = QCheckBox("Downgrade Resolution")
-        self.chk_downgrade_res.setStyleSheet("font-weight: bold; color: #1E293B;")
+        self.chk_downgrade_res.setStyleSheet("font-weight: bold;")
         self.chk_downgrade_res.toggled.connect(self._on_toggle_downgrade_res)
         f_downgrade.addWidget(self.chk_downgrade_res)
 
@@ -114,7 +112,8 @@ class PreprocessingMixin:
 
         # Initial Resolution Source Selector
         lbl_ini_hdr = QLabel("Initial Resolution (Observed):")
-        lbl_ini_hdr.setStyleSheet("font-weight: 600; color: #475569; font-size: 11px; margin-top: 4px;")
+        lbl_ini_hdr.setProperty("role", "subtleLabel")
+        lbl_ini_hdr.setStyleSheet("font-weight: 600; font-size: 11px; margin-top: 4px;")
         form_down.addRow(lbl_ini_hdr)
 
         self.rad_res_ini_const = QRadioButton("Constant:")
@@ -146,12 +145,14 @@ class PreprocessingMixin:
         form_down.addRow(row_ini_file)
 
         self.lbl_res_ini_file = QLabel("")
-        self.lbl_res_ini_file.setStyleSheet(f"color: {MUTED}; font-size: 10px; font-style: italic;")
+        self.lbl_res_ini_file.setProperty("role", "mutedLabel")
+        self.lbl_res_ini_file.setStyleSheet("font-size: 10px; font-style: italic;")
         form_down.addRow("", self.lbl_res_ini_file)
 
         # Target Resolution Source Selector
         lbl_tgt_hdr = QLabel("Target Resolution (Desired / Model):")
-        lbl_tgt_hdr.setStyleSheet("font-weight: 600; color: #475569; font-size: 11px; margin-top: 4px;")
+        lbl_tgt_hdr.setProperty("role", "subtleLabel")
+        lbl_tgt_hdr.setStyleSheet("font-weight: 600; font-size: 11px; margin-top: 4px;")
         form_down.addRow(lbl_tgt_hdr)
 
         self.rad_res_tgt_const = QRadioButton("Constant:")
@@ -183,7 +184,8 @@ class PreprocessingMixin:
         form_down.addRow(row_tgt_file)
 
         self.lbl_res_tgt_file = QLabel("")
-        self.lbl_res_tgt_file.setStyleSheet(f"color: {MUTED}; font-size: 10px; font-style: italic;")
+        self.lbl_res_tgt_file.setProperty("role", "mutedLabel")
+        self.lbl_res_tgt_file.setStyleSheet("font-size: 10px; font-style: italic;")
         form_down.addRow("", self.lbl_res_tgt_file)
 
         f_downgrade.addWidget(self.w_downgrade_controls)
@@ -229,7 +231,8 @@ class PreprocessingMixin:
 
         self.lbl_cut_mode_help = QLabel("Tip: Click 1st and 2nd points on the spectrum to cut regions or boundaries.")
         self.lbl_cut_mode_help.setWordWrap(True)
-        self.lbl_cut_mode_help.setStyleSheet("color: #64748B; font-size: 11px; font-style: italic;")
+        self.lbl_cut_mode_help.setProperty("role", "mutedLabel")
+        self.lbl_cut_mode_help.setStyleSheet("font-size: 11px; font-style: italic;")
         f_cut.addWidget(self.lbl_cut_mode_help)
 
         # Preset & Clear buttons row

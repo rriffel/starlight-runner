@@ -12,10 +12,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
-from .constants import (
-    ACCENT, ACCENT_HOVER, DARK_BG, CARD_BG, TEXT_COLOR,
-    MUTED, BORDER_COLOR, SUCCESS_COLOR, DANGER_COLOR, STYLESHEET
-)
+from . import constants
 
 from ..reddening import REDDENING_LAWS
 from ..preprocessing import load_spectrum, clean_spectrum, save_spec_file
@@ -93,7 +90,8 @@ class MaskingMixin:
         btn_load_spec_mask = QPushButton("Load Spectrum (.spec, .txt, .fits)")
         btn_load_spec_mask.clicked.connect(self._on_load_spectrum_for_masking_dialog)
         self.lbl_mask_loaded_file = QLabel("No spectrum loaded (or use from Step 1)")
-        self.lbl_mask_loaded_file.setStyleSheet(f"color: {MUTED}; font-size: 11px;")
+        self.lbl_mask_loaded_file.setProperty("role", "mutedLabel")
+        self.lbl_mask_loaded_file.setStyleSheet("font-size: 11px;")
         f_spec.addWidget(btn_load_spec_mask)
         f_spec.addWidget(self.lbl_mask_loaded_file)
         left_layout.addWidget(grp_spec)
@@ -152,7 +150,8 @@ class MaskingMixin:
             "<b>Key 'Esc'</b>: Cancels 1st point selection"
         )
         lbl_mask_help.setWordWrap(True)
-        lbl_mask_help.setStyleSheet("color: #475569; font-size: 11px; line-height: 1.3; background: #F1F5F9; padding: 6px; border-radius: 4px;")
+        lbl_mask_help.setProperty("role", "helpBox")
+        lbl_mask_help.setStyleSheet("font-size: 11px; line-height: 1.3; padding: 6px;")
         f_inter.addWidget(lbl_mask_help)
         left_layout.addWidget(grp_interactive)
 
