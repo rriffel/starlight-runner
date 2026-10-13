@@ -289,6 +289,8 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
                 if obs_d and os.path.exists(obs_d):
                     self.txt_obs_dir.setText(obs_d)
                     self.starlight_config.obs_dir = obs_d
+            if hasattr(self, '_update_mc_availability'):
+                self._update_mc_availability()
         elif index == 3:
             # Sync Step 4 (Results)
             if hasattr(self, '_plot_results') and self.parsed_output is not None:

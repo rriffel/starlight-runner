@@ -178,13 +178,14 @@ python -m starlight_runner
 
 ### 🎲 Monte Carlo uncertainties
 
-In **Step ③ (STARLIGHT Grid)**, tick **Monte Carlo errors**, set **N** and the **MC Directory** (default `./mcmc`). *Run STARLIGHT* then also fits, for every spectrum of the run, $N$ realizations with the flux perturbed within its errors ($f_{\rm sim} = \mathcal{N}(f_{\rm obs}, \sigma_f)$), using the **same setup** and the spectrum's own mask (`<mask_dir>/<spectrum><mask_ext>`). Every property is reported as **np.mean ± np.std** of the $N$ fits and, for a single spectrum, the result is shown in Step ④. Everything goes to `<MC Directory>/<spectrum>/`:
+In **Step ③ (STARLIGHT Grid)**, tick **Monte Carlo errors**, set **N** and the **MC Directory** (default `./mcmc`). The option is only available when the input spectra have an **error spectrum** (3rd column, with *Error spectrum available* ticked). *Run STARLIGHT* then also fits, for every spectrum of the run, $N$ realizations with the flux perturbed within its errors ($f_{\rm sim} = \mathcal{N}(f_{\rm obs}, \sigma_f)$), using the **same setup** and the spectrum's own mask (`<mask_dir>/<spectrum><mask_ext>`). Every property is reported as **np.mean ± np.std** of the $N$ fits and, for a single spectrum, the result is shown in Step ④. Everything goes to `<MC Directory>/<spectrum>/`:
 
 | | |
 |---|---|
 | `spec/` | the $N$ perturbed spectra — removed after the run unless **Keep perturbed spectra** is ticked |
 | `out/` | the $N$ STARLIGHT fits |
 | `<spectrum>_mc_props.csv` | mean (`p`) and std (`std_p`) of every property |
+| `<spectrum>_mc.png` | final plot: mean spectra and population vectors with std error bars |
 | `mc_grid_*.inp` | grid files (removed together with the spectra) |
 
 Scripting / command line:

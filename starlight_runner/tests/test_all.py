@@ -11,7 +11,7 @@ from starlight_runner.parser import StarlightOutput
 from starlight_runner.pylight_reader import starlightPars, popVectors, StSyntesis
 from starlight_runner.montecarlo import (
     make_mc_spectra, generate_mc_grids, mc_config, load_mc_outputs, mc_statistics, mean_and_std,
-    prepare_monte_carlo, cleanup_mc_spectra
+    prepare_monte_carlo, cleanup_mc_spectra, error_spectrum_problem
 )
 
 
@@ -175,6 +175,18 @@ class TestMonteCarlo(unittest.TestCase):
         # MC grids must not be picked up by the normal "grid_*.inp" run
         import fnmatch
         self.assertFalse(any(fnmatch.fnmatch(os.path.basename(g), "grid_*.inp") for g in grids))
+
+    def test_error_spectrum_problem(self):
+        self.assertIsNone(error_spectrum_problem(self.spec))
+        d = np.loadtxt(self.spec)
+        two_col = os.path.join(self.tmp, "noerr.txt")
+        np.savetxt(two_col, d[:, :2])
+        self.assertIn("no error column", error_spectrum_problem(two_col))
+        zero = os.path.join(self.tmp, "zeroerr.txt")
+        np.savetxt(zero, np.column_stack([d[:, :2], np.zeros(len(d))]))
+        self.assertIn("no positive errors", error_spectrum_problem(zero))
+        with self.assertRaises(ValueError):
+            make_mc_spectra(zero, 2, out_dir=os.path.join(self.tmp, "z"))
 
     def test_prepare_and_cleanup_in_mc_dir(self):
         mask = os.path.join(self.tmp, "gal.mask")

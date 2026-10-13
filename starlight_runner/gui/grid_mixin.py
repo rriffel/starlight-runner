@@ -17,7 +17,8 @@ from . import constants
 from ..runner import StarlightConfig, generate_grid_files
 from ..custom_widgets import StarlightWorkerThread
 from ..montecarlo import (
-    prepare_monte_carlo, cleanup_mc_spectra, load_mc_outputs, mc_statistics, write_mc_table
+    prepare_monte_carlo, cleanup_mc_spectra, load_mc_outputs, mc_statistics, write_mc_table,
+    error_spectrum_problem
 )
 
 class GridMixin:
@@ -220,6 +221,13 @@ class GridMixin:
             wdg.setEnabled(False)
             self.chk_mc.toggled.connect(wdg.setEnabled)
 
+        # Monte Carlo needs an error spectrum: only available when the input has one
+        self._mc_tooltip = self.chk_mc.toolTip()
+        self.chk_err_spec.toggled.connect(self._update_mc_availability)
+        self.txt_obs_dir.editingFinished.connect(self._update_mc_availability)
+        self.combo_spec_ext.currentTextChanged.connect(self._update_mc_availability)
+        self._update_mc_availability()
+
         left_layout.addWidget(grp_pars)
 
 
@@ -313,6 +321,7 @@ class GridMixin:
             rel = self._to_relpath(d)
             self.txt_obs_dir.setText(rel)
             self.starlight_config.obs_dir = rel
+            self._update_mc_availability()
 
 
     def _on_browse_mask_dir_step2(self):
@@ -591,6 +600,34 @@ class GridMixin:
         self.btn_stop_starlight.setEnabled(True)
         self.worker_thread.start()
 
+    def _mc_unavailable_reason(self, check_all=False):
+        """Why Monte Carlo cannot run on the current input (None if it can)."""
+        if not self.chk_err_spec.isChecked():
+            return "the input has no error spectrum ('Error spectrum available' is unchecked)"
+        spec_files, _ = self._resolve_spectrum_files(
+            self.txt_obs_dir.text().strip(), self.combo_spec_ext.currentText().strip()
+        )
+        if not spec_files:
+            return "no input spectrum found"
+        for spec in (spec_files if check_all else spec_files[:3]):
+            problem = error_spectrum_problem(spec)
+            if problem:
+                return problem
+        return None
+
+    def _update_mc_availability(self, *_):
+        """Enable the Monte Carlo option only when the input spectra have an error spectrum."""
+        if not hasattr(self, 'chk_mc'):
+            return
+        reason = self._mc_unavailable_reason()
+        if reason:
+            self.chk_mc.setChecked(False)
+            self.chk_mc.setEnabled(False)
+            self.chk_mc.setToolTip(f"Monte Carlo errors need an error spectrum: {reason}.")
+        else:
+            self.chk_mc.setEnabled(True)
+            self.chk_mc.setToolTip(self._mc_tooltip)
+
     def _on_browse_mc_dir(self):
         d = QFileDialog.getExistingDirectory(self, "Monte Carlo Simulation Directory", self.txt_mc_dir.text())
         if d:
@@ -608,6 +645,12 @@ class GridMixin:
         )
         if not spec_files:
             QMessageBox.warning(self, "Monte Carlo", "No spectrum found for the Monte Carlo realizations.")
+            return None
+
+        reason = self._mc_unavailable_reason(check_all=True)
+        if reason:
+            QMessageBox.critical(self, "Monte Carlo", f"Monte Carlo errors need an error spectrum:\n{reason}.")
+            self._update_mc_availability()
             return None
 
         cfg = self.starlight_config
@@ -655,8 +698,10 @@ class GridMixin:
         return grids
 
     def _finish_mc(self):
-        """Aggregate each Monte Carlo set: mean ± std table, and show it in Step 4."""
-        loaded = []
+        """
+        Aggregate each Monte Carlo set: mean ± std table and final plot (mean
+        values with std error bars), saved next to the fits and shown in Step 4.
+        """
         keep = self.chk_mc_keep.isChecked()
         for job in self._mc_jobs:
             base = job['base']
@@ -673,12 +718,13 @@ class GridMixin:
                 table = os.path.join(job['root'], f"{base}_mc_props.csv")
                 write_mc_table(stats, table, name=base, pylight_config=self.pylight_config)
                 self.txt_log.append(f"📊 Monte Carlo {base}: mean ± std of {mc['n']} fits → {table}")
-                loaded.append(done)
+                self.load_mc_set(done)
+                plot = os.path.join(job['root'], f"{base}_mc.png")
+                self.fig_results.savefig(plot, dpi=200, bbox_inches='tight')
+                self.txt_log.append(f"🖼️ Monte Carlo {base}: plot (mean ± std) → {plot}")
             except Exception as e:
                 self.txt_log.append(f"❌ Monte Carlo {base}: {e}")
         self._mc_jobs = []
-        if len(loaded) == 1:
-            self.load_mc_set(loaded[0])
 
     def _on_stop_starlight_clicked(self):
         if hasattr(self, 'worker_thread') and self.worker_thread.isRunning():

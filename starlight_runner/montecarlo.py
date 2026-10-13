@@ -59,6 +59,25 @@ def mc_paths(spec_path, mc_dir=DEFAULT_MC_DIR):
             'spec': os.path.join(root, "spec"), 'out': os.path.join(root, "out")}
 
 
+def error_spectrum_problem(spec_path):
+    """
+    None if ``spec_path`` has a usable error spectrum (3rd column, finite,
+    with positive values); otherwise a short reason. Monte Carlo needs it.
+    """
+    try:
+        data = np.loadtxt(spec_path, comments='#', ndmin=2)
+    except Exception as exc:
+        return f"cannot read {os.path.basename(spec_path)} ({exc})"
+    if data.shape[1] < 3:
+        return f"{os.path.basename(spec_path)} has no error column (lambda flux error [flag])"
+    err = data[:, 2]
+    if not np.all(np.isfinite(err)):
+        return f"{os.path.basename(spec_path)} has NaN/inf errors"
+    if not np.any(err > 0):
+        return f"{os.path.basename(spec_path)} has no positive errors"
+    return None
+
+
 def make_mc_spectra(spec_path, n_sim, out_dir=None, seed=None):
     """
     Create ``n_sim`` perturbed copies of a STARLIGHT input spectrum.
@@ -85,6 +104,9 @@ def make_mc_spectra(spec_path, n_sim, out_dir=None, seed=None):
             f"{spec_path}: {n_bad} point(s) with NaN/inf in lambda, flux or error. "
             "Clean the spectrum first (Step 1 / preprocessing.clean_spectrum)."
         )
+
+    if not np.any(data[:, 2] > 0):
+        raise ValueError(f"{spec_path}: the error spectrum has no positive values; Monte Carlo needs errors.")
 
     paths = mc_paths(spec_path)
     base = paths['base']
