@@ -172,6 +172,40 @@ python -m starlight_runner
 4. **Export:**
    - High-resolution publication figures (**PNG**, **PDF**, **SVG**).
    - Parameter tables (**CSV**, **TXT**).
+5. **Monte Carlo results:** selecting several `.out` files of the same spectrum in *Open Result(s)* shows every property as **mean ± std** of the fits (metrics, histogram error bars, spectrum band and exported table). This is loaded automatically after a Monte Carlo run (Step ③).
+
+---
+
+### 🎲 Monte Carlo uncertainties
+
+In **Step ③ (STARLIGHT Grid)**, tick **Monte Carlo errors**, set **N** and the **MC Directory** (default `./mcmc`). *Run STARLIGHT* then also fits, for every spectrum of the run, $N$ realizations with the flux perturbed within its errors ($f_{\rm sim} = \mathcal{N}(f_{\rm obs}, \sigma_f)$), using the **same setup** and the spectrum's own mask (`<mask_dir>/<spectrum><mask_ext>`). Every property is reported as **np.mean ± np.std** of the $N$ fits and, for a single spectrum, the result is shown in Step ④. Everything goes to `<MC Directory>/<spectrum>/`:
+
+| | |
+|---|---|
+| `spec/` | the $N$ perturbed spectra — removed after the run unless **Keep perturbed spectra** is ticked |
+| `out/` | the $N$ STARLIGHT fits |
+| `<spectrum>_mc_props.csv` | mean (`p`) and std (`std_p`) of every property |
+| `mc_grid_*.inp` | grid files (removed together with the spectra) |
+
+Scripting / command line:
+
+```bash
+# 100 realizations with the setup saved from the GUI (Save Config State)
+python -m starlight_runner.montecarlo testfiles/comb_major_6_clean.spec -n 100 \
+       --state starlight_gui_config.json --mask mask_dir/comb_major_6_clean.mask --dist 10 --seed 42 \
+       --mc-dir ./mcmc [--keep-spectra]
+```
+
+```python
+from starlight_runner.montecarlo import run_monte_carlo, load_mc_outputs, mc_statistics, write_mc_table
+
+outs  = run_monte_carlo("testfiles/comb_major_6_clean.spec", config, n_sim=100,
+                        mask_file="mask_dir/comb_major_6_clean.mask", seed=42,
+                        mc_dir="./mcmc", keep_spectra=False)
+stats = mc_statistics(load_mc_outputs(outs), pylight_config, gal_dist=10.0)  # columns: mean, std, N
+write_mc_table(stats, "comb_major_6_mc_props.csv", name="comb_major_6")    # p, std_p
+```
+
 
 ---
 
@@ -253,6 +287,7 @@ starlight-runner/
     ├── runner.py                                 # Grid generator & multi-core worker manager
     ├── parser.py                                 # StarlightOutput parser & DataFrame exporter
     ├── pylight_reader.py                         # PyLight output reader for parameters & populations
+    ├── montecarlo.py                             # Monte Carlo realizations, mean ± std of all properties  
     ├── gui/                                      # GUI modular mixins
     │   ├── preprocessing_mixin.py                # Step 1: Preprocessing UI & interactive cut
     │   ├── masking_mixin.py                      # Step 2: Masking UI & CreateMasks mode

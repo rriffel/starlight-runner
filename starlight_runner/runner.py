@@ -131,6 +131,10 @@ def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="
     Generate STARLIGHT grid input files (e.g. grid_1.inp, grid_2.inp, ...)
     partitioning the list of spectra across the specified number of processors.
     Paths in headers are written relative to current working directory.
+
+    If ``default_mask_file`` is given, every spectrum uses that mask (its
+    basename, which must live in ``config.mask_dir``) instead of the mask
+    named after the spectrum (``<spectrum><mask_ext>``).
     
     Returns:
         list of generated grid file paths.
@@ -192,8 +196,11 @@ def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="
                 base_name = os.path.splitext(spec_name)[0]
                 spec_dir = os.path.dirname(spec)
 
-                mask_ext = config.mask_ext if config.mask_ext.startswith('.') else f".{config.mask_ext}"
-                mask_name = f"{base_name}{mask_ext}"
+                if default_mask_file:
+                    mask_name = os.path.basename(default_mask_file)
+                else:
+                    mask_ext = config.mask_ext if config.mask_ext.startswith('.') else f".{config.mask_ext}"
+                    mask_name = f"{base_name}{mask_ext}"
 
                 out_name = f"{base_name}.out"
                 config_name = os.path.basename(config.config_file)

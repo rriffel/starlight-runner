@@ -14,7 +14,10 @@ import matplotlib.pyplot as plt
 
 from . import constants
 
-from ..pylight_reader import starlightPars, popVectors, StSyntesis
+from ..pylight_reader import (
+    starlightPars, popVectors, StSyntesis, pylight_properties, format_pylight_value
+)
+from ..montecarlo import load_mc_outputs, mc_statistics, mean_and_std, write_mc_table
 from ..custom_widgets import PylightConfigDialog
 
 class ResultsMixin:
@@ -34,7 +37,9 @@ class ResultsMixin:
         # File Select
         grp_out = QGroupBox("1. Select Starlight Fit (.out)")
         f_out = QVBoxLayout(grp_out)
-        btn_open_out = QPushButton("Open Result (.out)")
+        btn_open_out = QPushButton("Open Result(s) (.out)")
+        btn_open_out.setToolTip("Select one fit, or several fits of the same spectrum\n"
+                                "(Monte Carlo realizations) to show mean ± std.")
         btn_open_out.clicked.connect(self._on_open_out_dialog)
         self.lbl_out_file = QLabel("No fit loaded")
         self.lbl_out_file.setProperty("role", "mutedLabel")
@@ -141,11 +146,13 @@ class ResultsMixin:
             self.statusBar().showMessage("Plots updated with new configuration.")
 
     def _on_open_out_dialog(self):
-        filepath, _ = QFileDialog.getOpenFileName(
-            self, "Open STARLIGHT Output", "", "Starlight Output (*.out);;All Files (*)"
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Open STARLIGHT Output(s)", "", "Starlight Output (*.out);;All Files (*)"
         )
-        if filepath:
-            self.load_starlight_out(filepath)
+        if len(files) == 1:
+            self.load_starlight_out(files[0])
+        elif len(files) > 1:
+            self.load_mc_set(files)
 
     def load_starlight_out(self, filepath):
         try:
@@ -235,6 +242,60 @@ class ResultsMixin:
         except Exception as e:
             QMessageBox.critical(self, "Error Reading .out File", str(e))
 
+    # -----------------------------------------------------------------
+    # Monte Carlo uncertainties
+    # -----------------------------------------------------------------
+
+    def load_mc_set(self, files):
+        """Load N fits of the same galaxy and show mean ± error of every quantity."""
+        try:
+            mc = load_mc_outputs(files)
+        except Exception as e:
+            QMessageBox.critical(self, "Error Reading Monte Carlo Fits", str(e))
+            return
+        if mc['n'] < 2:
+            QMessageBox.warning(self, "Monte Carlo", "At least two readable fits are needed.")
+            return
+        base = re.sub(r"_mc\d+$", "", os.path.splitext(os.path.basename(mc['files'][0]))[0])
+        self.parsed_output = {
+            'pars': mc['pars'][0],
+            'ParList': mc['ParList'],
+            'pop': mc['pop'][0],
+            'popComps': mc['popComps'],
+            'spec': mc['spec'][0],
+            'filename': f"{base}_mc.out",
+            'version': mc['version'],
+            'mc': mc,
+        }
+        self.lbl_out_file.setText(f"{base}: {mc['n']} Monte Carlo fits")
+        self._update_mc_labels()
+        self._plot_results()
+        msg = f"Loaded {mc['n']} Monte Carlo fits of {base}"
+        if mc['skipped']:
+            msg += f" ({len(mc['skipped'])} skipped)"
+        self.statusBar().showMessage(msg)
+
+    def _update_mc_labels(self):
+        mc = self.parsed_output['mc']
+        stats = mc_statistics(mc, self.pylight_config, self.sb_gal_dist.value())
+
+        def show(lbl, key, fmt):
+            if key not in stats.index or np.isnan(stats.at[key, 'mean']):
+                lbl.setText("—")
+                return
+            lbl.setText(f"{stats.at[key, 'mean']:{fmt}} ± {stats.at[key, 'std']:{fmt}}")
+
+        show(self.lbl_chi2, 'ChiSqrt', '.3f')
+        show(self.lbl_adev, 'Adev', '.2f')
+        show(self.lbl_snr, 'SNR', '.1f')
+        show(self.lbl_av, 'Av', '.3f')
+        show(self.lbl_v0, 'v0', '.1f')
+        show(self.lbl_vd, 'vd', '.1f')
+        show(self.lbl_age_l, 'Mage_L', '.2f')
+        show(self.lbl_age_m, 'Mage_M', '.2f')
+        show(self.lbl_z_l, 'MZ_L', '.4f')
+        show(self.lbl_z_m, 'MZ_M', '.4f')
+
     def _plot_results(self):
         self.fig_results.clear()
         if self.parsed_output is None:
@@ -251,6 +312,24 @@ class ResultsMixin:
             return
 
         config = self.pylight_config
+
+        # Monte Carlo sets: every plotted quantity is computed per realization and
+        # shown as the mean with the std of the N fits as error bar; single fits have no bars.
+        mc = data.get('mc')
+        err_kw = dict(ecolor='#334155', elinewidth=1.0, capsize=2)
+
+        def _norm(v):
+            return v * (100.0 / np.sum(v)) if np.sum(v) > 0 else v
+
+        runs = [(_norm(p[:, 0]), _norm(p[:, 2])) for p in (mc['pop'] if mc else [pop])]
+
+        def agg(fn):
+            """fn(x_j, mu_j) of each run -> (mean, error or None)."""
+            vals = np.array([fn(x, m) for x, m in runs], dtype=float)
+            if not mc:
+                return vals[0], None
+            mean, std, _ = mean_and_std(vals, axis=0)
+            return mean, std
 
         # Determine number of bottom subplots based on AGN flags
         plot_fc = config.get("IsAGNComp", False) or config.get("OnlyFC", False)
@@ -289,15 +368,25 @@ class ResultsMixin:
 
         # Columns for StSyntesis: 0:l_obs, 1:f_obs, 2:f_syn, 3:wei
         l_obs = spec[:, 0]
-        f_obs = spec[:, 1]
-        f_syn = spec[:, 2]
         wei = spec[:, 3]
-        
-        residual = f_obs - f_syn
+        if mc:
+            specs = np.array(mc['spec'], dtype=float)
+            f_obs = np.nanmean(specs[:, :, 1], axis=0)
+            f_syn, e_syn, _ = mean_and_std(specs[:, :, 2], axis=0)
+            residual = np.nanmean(specs[:, :, 1] - specs[:, :, 2], axis=0)
+        else:
+            f_obs = spec[:, 1]
+            f_syn = spec[:, 2]
+            residual = f_obs - f_syn
 
         # Top Plot: Observed vs Synthetic
-        ax_top.plot(l_obs, f_obs, color="#0F172A", lw=1.1, label="Observed")
-        ax_top.plot(l_obs, f_syn, color="#DC2626", lw=1.3, label="Synthetic")
+        if mc:
+            ax_top.plot(l_obs, f_obs, color="#0F172A", lw=1.1, label=f"Observed (mean of {mc['n']})")
+            ax_top.fill_between(l_obs, f_syn - e_syn, f_syn + e_syn, color="#DC2626", alpha=0.3, lw=0)
+            ax_top.plot(l_obs, f_syn, color="#DC2626", lw=1.3, label="Synthetic (mean ± std)")
+        else:
+            ax_top.plot(l_obs, f_obs, color="#0F172A", lw=1.1, label="Observed")
+            ax_top.plot(l_obs, f_syn, color="#DC2626", lw=1.3, label="Synthetic")
 
         # Flag masked points with continuous lines
         mask_regions = np.where(wei <= 0.0)[0]
@@ -321,7 +410,12 @@ class ResultsMixin:
             if 'AV_min' in p: av = data['pars'][i]
             if 'S/N' in p: snr = data['pars'][i]
             
-        ax_top.set_title(f"{filename}", fontsize=12, fontweight="bold", pad=10)
+        if mc:
+            title = (f"{os.path.splitext(filename)[0]} — Monte Carlo: mean of N = {mc['n']} fits "
+                     "(errors: std)")
+        else:
+            title = filename
+        ax_top.set_title(title, fontsize=12, fontweight="bold", pad=10)
         ax_top.legend(loc="upper right", frameon=True, facecolor='white', edgecolor='#E2E8F0', fancybox=True)
 
         # Residuals Plot
@@ -338,13 +432,8 @@ class ResultsMixin:
         ax_res.set_ylabel("Residual", fontsize=10, fontweight='normal')
 
         if len(pop) > 0:
-            x_vals = pop[:, 0]
-            m_vals = pop[:, 2]
             age_yr = pop[:, 3]
             Z_j = pop[:, 4]
-            
-            x_vals = x_vals * (100.0 / np.sum(x_vals)) if np.sum(x_vals) > 0 else x_vals
-            m_vals = m_vals * (100.0 / np.sum(m_vals)) if np.sum(m_vals) > 0 else m_vals
 
             # Plot 1: ax_pop_all (Sum of all metallicities)
             ax_pop_all.set_xlim(5, 10.5)
@@ -353,12 +442,14 @@ class ResultsMixin:
             ax_pop_all.set_ylabel('Fraction (%)', fontsize=10)
             
             unique_ages = np.unique(age_yr)
-            sum_x = np.array([np.sum(x_vals[age_yr == a]) for a in unique_ages])
-            sum_m = np.array([np.sum(m_vals[age_yr == a]) for a in unique_ages])
+            sum_x, e_sum_x = agg(lambda x, m: [np.sum(x[age_yr == a]) for a in unique_ages])
+            sum_m, e_sum_m = agg(lambda x, m: [np.sum(m[age_yr == a]) for a in unique_ages])
             log_ages = np.log10(np.where(unique_ages > 0, unique_ages, 1))
             
-            ax_pop_all.bar(log_ages, sum_x, width=0.4, align='center', color='#3B82F6', alpha=0.35, edgecolor='#1D4ED8', lw=1.2, label=r'$\Sigma x_j$ (Light)')
-            ax_pop_all.bar(log_ages, sum_m, width=0.2, align='center', color='None', edgecolor='#991B1B', lw=1.5, ls='dotted', label=r'$\Sigma \mu_j$ (Mass)')
+            ax_pop_all.bar(log_ages, sum_x, width=0.4, align='center', color='#3B82F6', alpha=0.35, edgecolor='#1D4ED8', lw=1.2, label=r'$\Sigma x_j$ (Light)',
+                           yerr=e_sum_x, error_kw=err_kw)
+            ax_pop_all.bar(log_ages, sum_m, width=0.2, align='center', color='None', edgecolor='#991B1B', lw=1.5, ls='dotted', label=r'$\Sigma \mu_j$ (Mass)',
+                           yerr=e_sum_m, error_kw=dict(err_kw, ecolor='#991B1B'))
             ax_pop_all.legend(loc='upper right', frameon=True, facecolor='white', edgecolor='#E2E8F0', fontsize=9)
             ax_pop_all.set_title("Summed Populations", fontsize=11, fontweight="bold", pad=8)
 
@@ -384,8 +475,12 @@ class ResultsMixin:
                 
                 a_z = age_yr[mask]
                 log_a_z = np.log10(np.where(a_z > 0, a_z, 1))
-                ax_pop_z.bar(log_a_z, x_vals[mask], width=width, align='center', color=color, alpha=0.35, edgecolor=color, lw=1.2)
-                ax_pop_z.bar(log_a_z, m_vals[mask], width=width/2.0, align='center', color='None', edgecolor=color, lw=1.5, ls='dotted')
+                z_x, e_z_x = agg(lambda x, m: x[mask])
+                z_m, e_z_m = agg(lambda x, m: m[mask])
+                ax_pop_z.bar(log_a_z, z_x, width=width, align='center', color=color, alpha=0.35, edgecolor=color, lw=1.2,
+                             yerr=e_z_x, error_kw=dict(err_kw, ecolor=color))
+                ax_pop_z.bar(log_a_z, z_m, width=width/2.0, align='center', color='None', edgecolor=color, lw=1.5, ls='dotted',
+                             yerr=e_z_m, error_kw=dict(err_kw, ecolor=color))
                 
                 p_y -= 12
                 if p_y > 27:
@@ -411,13 +506,15 @@ class ResultsMixin:
                 if label not in bin_pop_vec: continue
                 bounds = bin_pop_vec[label]
                 mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
-                b_x = np.sum(x_vals[mask])
-                b_m = np.sum(m_vals[mask])
+                b_x, e_b_x = agg(lambda x, m: np.sum(x[mask]))
+                b_m, e_b_m = agg(lambda x, m: np.sum(m[mask]))
                 b_center = (np.log10(max(bounds[0], 1)) + np.log10(bounds[1])) / 2.0
                 
                 color = macolor[c % len(macolor)]
-                ax_pop_bin.bar(b_center, b_x, width=0.4, align='center', color=color, alpha=0.35, edgecolor=color, lw=1.2)
-                ax_pop_bin.bar(b_center, b_m, width=0.2, align='center', color='None', edgecolor=color, lw=1.5, ls='dotted')
+                ax_pop_bin.bar(b_center, b_x, width=0.4, align='center', color=color, alpha=0.35, edgecolor=color, lw=1.2,
+                               yerr=e_b_x, error_kw=dict(err_kw, ecolor=color))
+                ax_pop_bin.bar(b_center, b_m, width=0.2, align='center', color='None', edgecolor=color, lw=1.5, ls='dotted',
+                               yerr=e_b_m, error_kw=dict(err_kw, ecolor=color))
                 
                 p_y -= 12
                 if p_y > 27:
@@ -427,8 +524,8 @@ class ResultsMixin:
             ax_pop_bin.set_title("Binned Vectors", fontsize=11, fontweight="bold", pad=8)
 
             if plot_fc or plot_hd:
-                nu, fc_x = [], []
-                bb, bb_x = [], []
+                nu, fc_idx = [], []
+                bb, bb_idx = [], []
                 popComps = data.get('popComps', [])
                 
                 for i, comp in enumerate(popComps):
@@ -441,7 +538,7 @@ class ResultsMixin:
                                 val = float(match.group())
                                 if val > 10: val /= 100.0
                                 nu.append(val)
-                                fc_x.append(x_vals[i])
+                                fc_idx.append(i)
                         except: pass
                     elif 'agn_bb_' in comp_str or 'bb_' in comp_str:
                         try:
@@ -450,14 +547,16 @@ class ResultsMixin:
                             if match:
                                 val = float(match.group())
                                 bb.append(val)
-                                bb_x.append(x_vals[i])
+                                bb_idx.append(i)
                         except: pass
                         
                 if ax_agn_fc:
                     ax_agn_fc.spines['left'].set_visible(False)
                     ax_agn_fc.set_yticks([])
                     if len(nu) > 0:
-                        ax_agn_fc.bar(nu, fc_x, width=0.1, align='center', color='#8B5CF6', alpha=0.5, edgecolor='#6D28D9')
+                        fc_x, e_fc_x = agg(lambda x, m: x[fc_idx])
+                        ax_agn_fc.bar(nu, fc_x, width=0.1, align='center', color='#8B5CF6', alpha=0.5, edgecolor='#6D28D9',
+                                      yerr=e_fc_x, error_kw=dict(err_kw, ecolor='#6D28D9'))
                     ax_agn_fc.set_title('FC', fontsize=11, fontweight="bold", pad=8)
                     ax_agn_fc.set_xlabel(r'Index $\alpha$', fontsize=10)
                     
@@ -465,7 +564,9 @@ class ResultsMixin:
                     ax_agn_hd.spines['left'].set_visible(False)
                     ax_agn_hd.set_yticks([])
                     if len(bb) > 0:
-                        ax_agn_hd.bar(bb, bb_x, width=50, align='center', color='#F59E0B', alpha=0.5, edgecolor='#B45309')
+                        bb_x, e_bb_x = agg(lambda x, m: x[bb_idx])
+                        ax_agn_hd.bar(bb, bb_x, width=50, align='center', color='#F59E0B', alpha=0.5, edgecolor='#B45309',
+                                      yerr=e_bb_x, error_kw=dict(err_kw, ecolor='#B45309'))
                     ax_agn_hd.set_title('Hot Dust', fontsize=11, fontweight="bold", pad=8)
                     ax_agn_hd.set_xlabel('T (K)', fontsize=10)
 
@@ -503,213 +604,29 @@ class ResultsMixin:
         version = data.get('version', 'V4')
 
         out_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Parameters Table", f"{base_name}_summary.csv",
+            self, "Save Parameters Table",
+            f"{base_name}_props.csv" if 'mc' in data else f"{base_name}_summary.csv",
             "CSV Table (*.csv);;TXT Table (*.txt);;All Files (*)"
         )
         if not out_path:
             return
 
         try:
-            pop = data['pop']
-            popComps = data.get('popComps', np.array([]))
-            pars = data['pars']
-            ParList = data['ParList']
-
-            # Helper to look up a parameter by name
-            def get_par(name):
-                for i, p in enumerate(ParList):
-                    if name in p and i < len(pars):
-                        return pars[i]
-                return np.nan
-
-            # --- Population vectors (renormalized to 100%) ---
-            x_j = pop[:, 0]
-            popMi = pop[:, 1]
-            mcor_j = pop[:, 2]
-            age_yr = pop[:, 3]
-            Z_j = pop[:, 4]
-            components = popComps
-
-            popx = x_j * (100.0 / np.sum(x_j)) if np.sum(x_j) > 0 else x_j
-            popm = mcor_j * (100.0 / np.sum(mcor_j)) if np.sum(mcor_j) > 0 else mcor_j
-            popMi_norm = popMi * (100.0 / np.sum(popMi)) if np.sum(popMi) > 0 else popMi
-
-            # --- Fit parameters ---
-            chi2 = get_par('chi2/Nl_eff')
-            if np.isnan(chi2):
-                chi2 = get_par('chi2]')
-            adev = get_par('adev')
-            snr = get_par('S/N in S/N window')
-            av = get_par('AV_min')
-            fobs_norm = data.get('fobs_norm', get_par('fobs_norm'))
-
-            # --- Galaxy distance and stellar masses ---
             gal_D = self.sb_gal_dist.value()
-            gd = 3.08567758e24 * gal_D  # Mpc -> cm
-            NormFac = config.get('NormFac', 1.0)
-
-            if version == 'V5':
-                Mini_t = data.get('Mini_t', np.nan)
-                Mcor_t = data.get('Mcor_t', np.nan)
-            else:  # V4
-                Mini_tot_raw = data.get('Mini_tot_raw', get_par('Mini_tot'))
-                Mcor_tot_raw = data.get('Mcor_tot_raw', get_par('Mcor_tot'))
-                if gal_D > 0:
-                    Mini_t = NormFac * (Mini_tot_raw * 4.0 * np.pi) * gd**2 / 3.826e33
-                    Mcor_t = NormFac * (Mcor_tot_raw * 4.0 * np.pi) * gd**2 / 3.826e33
-                else:
-                    Mini_t = np.nan
-                    Mcor_t = np.nan
-
-            # --- Mean ages and metallicities (excluding AGN components) ---
-            sumvec = []
-            for idx_c, comp in enumerate(components):
-                comp_str = str(comp)
-                if 'BB_' not in comp_str and 'Power' not in comp_str:
-                    sumvec.append(idx_c)
-            sumvec = np.array(sumvec, dtype=int) if len(sumvec) > 0 else np.arange(len(popx))
-
-            log_age = np.log10(np.where(age_yr > 0, age_yr, 1))
-            px_s = popx[sumvec]
-            pm_s = popm[sumvec]
-            la_s = log_age[sumvec]
-            z_s = Z_j[sumvec]
-
-            sum_px_s = np.sum(px_s)
-            sum_pm_s = np.sum(pm_s)
-            meanAgex = np.sum((px_s / sum_px_s) * la_s) if sum_px_s > 0 else np.nan
-            meanZx = np.sum((px_s / sum_px_s) * z_s) if sum_px_s > 0 else np.nan
-            meanAgem = np.sum((pm_s / sum_pm_s) * la_s) if sum_pm_s > 0 else np.nan
-            meanZm = np.sum((pm_s / sum_pm_s) * z_s) if sum_pm_s > 0 else np.nan
-
-            # === Build the output row in pylight order ===
-            # Formatting conventions from pylight.py:
-            #   formf = '{:.2F}'  → fractions, Av, ages, adev, chi2, SNR, GalDist
-            #   forme = '{:.2E}'  → M*, M*in, SFR, F_Norm
-            #   '{:.4}'           → metallicities (4 significant figures)
-            def formf(v):
-                """Format like pylight formf: 2 decimal places."""
-                return f'{v:.2f}' if not np.isnan(v) else 'NaN'
-
-            def forme(v):
-                """Format like pylight forme: scientific notation, 2 decimal places."""
-                return f'{v:.2E}' if not np.isnan(v) else 'NaN'
-
-            def formz(v):
-                """Format like pylight metallicity: 4 significant figures."""
-                return f'{v:.4}' if not np.isnan(v) else 'NaN'
-
-            out_d = {'File': filename}
-
-            # --- AGN FC bins (if configured) ---
-            if config.get('IsAGNComp', False):
-                # Identify FC (Power law) components
-                nu_vals = []
-                fcind = []
-                for idx_c, comp in enumerate(components):
-                    comp_str = str(comp)
-                    if 'Power' in comp_str:
-                        ptmp = re.split(r'_', comp_str)
-                        try:
-                            nui = float(ptmp[1]) / 100.0
-                        except (IndexError, ValueError):
-                            match = re.search(r'[\d\.]+', comp_str)
-                            nui = float(match.group()) / 100.0 if match else 0
-                        nu_vals.append(nui)
-                        fcind.append(idx_c)
-                nu_vals = np.array(nu_vals)
-
-                for fc_label in config.get('BinFCVecLab', []):
-                    bounds = config.get('BinFCVec', {}).get(fc_label, [0, 0])
-                    if len(fcind) > 0:
-                        fc_mask = (nu_vals > bounds[0]) & (nu_vals <= bounds[1])
-                        val = np.sum(popx[fcind][fc_mask]) if np.any(fc_mask) else 0.0
-                    else:
-                        val = 0.0
-                    out_d[fc_label] = formf(val)
-
-                # Identify BB (Hot Dust) components
-                bb_vals = []
-                hdind = []
-                for idx_c, comp in enumerate(components):
-                    comp_str = str(comp)
-                    if 'BB_' in comp_str:
-                        ptmp = re.split(r'_', comp_str)
-                        try:
-                            bbi = float(ptmp[1])
-                        except (IndexError, ValueError):
-                            match = re.search(r'[\d\.]+', comp_str)
-                            bbi = float(match.group()) if match else 0
-                        bb_vals.append(bbi)
-                        hdind.append(idx_c)
-                bb_vals = np.array(bb_vals)
-
-                for hd_label in config.get('BinHDVecLab', []):
-                    bounds = config.get('BinHDVec', {}).get(hd_label, [0, 0])
-                    if len(hdind) > 0:
-                        hd_mask = (bb_vals > bounds[0]) & (bb_vals <= bounds[1])
-                        val = np.sum(popx[hdind][hd_mask]) if np.any(hd_mask) else 0.0
-                    else:
-                        val = 0.0
-                    out_d[hd_label] = formf(val)
-
-            # --- Binned population vectors (Light fractions) — formf ---
-            bin_pop_vec = config.get('BinPopVec', {})
-            for label in config.get('BinPopVecLab', list(bin_pop_vec.keys())):
-                bounds = bin_pop_vec.get(label, [0, 0])
-                mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
-                out_d[label] = formf(np.sum(popx[mask]))
-
-            # --- Binned population vectors (Mass fractions) — formf ---
-            for label in config.get('BinPopVecMassLab', []):
-                pop_labels = config.get('BinPopVecLab', list(bin_pop_vec.keys()))
-                idx_m = config.get('BinPopVecMassLab', []).index(label)
-                if idx_m < len(pop_labels):
-                    corr_pop_label = pop_labels[idx_m]
-                    bounds = bin_pop_vec.get(corr_pop_label, [0, 0])
-                else:
-                    bounds = [0, 0]
-                mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
-                out_d[label] = formf(np.sum(popm[mask]))
-
-            # --- Physical properties ---
-            out_d['Av'] = formf(av)                  # formf
-            out_d['Mage_L'] = formf(meanAgex)        # formf
-            out_d['Mage_M'] = formf(meanAgem)        # formf
-            out_d['MZ_L'] = formz(meanZx)            # 4 sig figs
-            out_d['MZ_M'] = formz(meanZm)            # 4 sig figs
-            out_d['M*'] = forme(Mcor_t)              # forme (scientific)
-            out_d['M*in'] = forme(Mini_t)            # forme (scientific)
-
-            # --- SFR bins — forme (scientific) ---
-            bin_sfr = config.get('BinSFR', {})
-            for sfr_label in config.get('BinSFRLabs', list(bin_sfr.keys())):
-                bounds = bin_sfr.get(sfr_label, [0, 0])
-                mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
-                SFR_t = np.sum(popMi_norm[mask])
-                SF = bounds[1] - bounds[0]
-                if SF > 0 and not np.isnan(Mini_t):
-                    out_d[sfr_label] = forme(((SFR_t / 100.0) * Mini_t) / SF)
-                else:
-                    out_d[sfr_label] = 'NaN'
-
-            # --- Fit quality ---
-            out_d['F_Norm'] = forme(fobs_norm)       # forme (scientific)
-            out_d['Adev'] = formf(adev)              # formf
-            out_d['ChiSqrt'] = formf(chi2)           # formf
-            out_d['SNR'] = formf(snr)                # formf
-
-            # --- Galaxy distance (optional) — formf ---
-            if config.get('SaveDist', True):
-                out_d['GalDist'] = formf(gal_D)
-
-            # Build and save DataFrame
-            df = pd.DataFrame([out_d])
-
-            if out_path.endswith('.txt'):
-                df.to_csv(out_path, sep='\t', index=False)
+            if 'mc' in data:
+                # Monte Carlo set: mean and error (std_) of the N fits
+                stats = mc_statistics(data['mc'], config, gal_D)
+                write_mc_table(stats, out_path, name=base_name, pylight_config=config)
             else:
-                df.to_csv(out_path, index=False)
+                props = pylight_properties(data['pars'], data['ParList'], data['pop'],
+                                           data.get('popComps', np.array([])), version, config, gal_D)
+                out_d = {'File': filename}
+                out_d.update({k: format_pylight_value(k, v, config) for k, v in props.items()})
+                df = pd.DataFrame([out_d])
+                if out_path.endswith('.txt'):
+                    df.to_csv(out_path, sep='\t', index=False)
+                else:
+                    df.to_csv(out_path, index=False)
 
             QMessageBox.information(self, "Table Saved", f"Saved: {out_path}")
         except Exception as e:

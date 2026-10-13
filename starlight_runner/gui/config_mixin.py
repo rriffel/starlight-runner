@@ -44,6 +44,10 @@ class ConfigMixin:
                     "is_err_available": 1 if self.chk_err_spec.isChecked() else 0,
                     "is_flag_available": 1 if self.chk_flag_spec.isChecked() else 0,
                     "seed": self.spin_seed.value(),
+                    "mc_enabled": self.chk_mc.isChecked(),
+                    "mc_n": self.spin_mc_n.value(),
+                    "mc_dir": self.txt_mc_dir.text(),
+                    "mc_keep_spectra": self.chk_mc_keep.isChecked(),
                     "downgrade_res_enabled": self.chk_downgrade_res.isChecked() if hasattr(self, 'chk_downgrade_res') else False,
                     "res_mode": self.combo_res_mode.currentIndex() if hasattr(self, 'combo_res_mode') else 0,
                     "res_ini_is_file": self.rad_res_ini_file.isChecked() if hasattr(self, 'rad_res_ini_file') else False,
@@ -99,6 +103,10 @@ class ConfigMixin:
                 if "is_err_available" in state: self.chk_err_spec.setChecked(bool(state["is_err_available"]))
                 if "is_flag_available" in state: self.chk_flag_spec.setChecked(bool(state["is_flag_available"]))
                 if "seed" in state: self.spin_seed.setValue(state["seed"])
+                if "mc_n" in state: self.spin_mc_n.setValue(state["mc_n"])
+                if "mc_dir" in state: self.txt_mc_dir.setText(state["mc_dir"])
+                if "mc_keep_spectra" in state: self.chk_mc_keep.setChecked(bool(state["mc_keep_spectra"]))
+                if "mc_enabled" in state: self.chk_mc.setChecked(bool(state["mc_enabled"]))
                 
                 if hasattr(self, 'chk_downgrade_res') and "downgrade_res_enabled" in state:
                     self.chk_downgrade_res.setChecked(bool(state["downgrade_res_enabled"]))

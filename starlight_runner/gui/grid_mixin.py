@@ -16,6 +16,9 @@ from . import constants
 
 from ..runner import StarlightConfig, generate_grid_files
 from ..custom_widgets import StarlightWorkerThread
+from ..montecarlo import (
+    prepare_monte_carlo, cleanup_mc_spectra, load_mc_outputs, mc_statistics, write_mc_table
+)
 
 class GridMixin:
     def _create_step3_runner(self):
@@ -180,6 +183,42 @@ class GridMixin:
         self.spin_procs.setRange(1, os.cpu_count() or 4)
         self.spin_procs.setValue(min(4, os.cpu_count() or 4))
         f_pars.addRow("Parallel CPU Cores:", self.spin_procs)
+
+        # Monte Carlo errors: N perturbed copies of each spectrum, same setup and mask
+        row_mc = QHBoxLayout()
+        self.chk_mc = QCheckBox("Monte Carlo errors")
+        self.chk_mc.setToolTip(
+            "Also fit N realizations of each spectrum, with the flux perturbed within its errors,\n"
+            "using this same setup and the spectrum's mask. Every property is then reported\n"
+            "as the mean ± std of the N fits (Step 4 and <MC dir>/<spectrum>/<spectrum>_mc_props.csv)."
+        )
+        self.spin_mc_n = QSpinBox()
+        self.spin_mc_n.setRange(2, 100000)
+        self.spin_mc_n.setValue(100)
+        row_mc.addWidget(self.chk_mc)
+        row_mc.addWidget(QLabel("N:"))
+        row_mc.addWidget(self.spin_mc_n, 1)
+        f_pars.addRow("Uncertainties:", row_mc)
+
+        row_mc_dir = QHBoxLayout()
+        self.txt_mc_dir = QLineEdit("./mcmc")
+        self.txt_mc_dir.setToolTip("Simulation directory: <dir>/<spectrum>/spec (perturbed spectra),\n"
+                                   "<dir>/<spectrum>/out (fits) and the mean ± std table.")
+        self.btn_mc_dir = QPushButton("...")
+        self.btn_mc_dir.setFixedWidth(36)
+        self.btn_mc_dir.clicked.connect(self._on_browse_mc_dir)
+        row_mc_dir.addWidget(self.txt_mc_dir)
+        row_mc_dir.addWidget(self.btn_mc_dir)
+        f_pars.addRow("MC Directory:", row_mc_dir)
+
+        self.chk_mc_keep = QCheckBox("Keep perturbed spectra")
+        self.chk_mc_keep.setToolTip("If unchecked, the N simulated spectra are removed after the run\n"
+                                    "(the fits and the mean ± std table are always kept).")
+        f_pars.addRow("", self.chk_mc_keep)
+
+        for wdg in (self.spin_mc_n, self.txt_mc_dir, self.btn_mc_dir, self.chk_mc_keep):
+            wdg.setEnabled(False)
+            self.chk_mc.toggled.connect(wdg.setEnabled)
 
         left_layout.addWidget(grp_pars)
 
@@ -523,6 +562,13 @@ class GridMixin:
             self._on_save_config_state()
 
         grid_files = sorted(glob.glob("grid_*.inp"))
+        self._mc_jobs = []
+        if self.chk_mc.isChecked():
+            mc_grids = self._prepare_mc_grids()
+            if mc_grids is None:
+                return
+            grid_files += mc_grids
+
         if not grid_files:
             QMessageBox.warning(self, "No Grid Files", "Please generate or create grid_*.inp files first.")
             return
@@ -545,6 +591,95 @@ class GridMixin:
         self.btn_stop_starlight.setEnabled(True)
         self.worker_thread.start()
 
+    def _on_browse_mc_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Monte Carlo Simulation Directory", self.txt_mc_dir.text())
+        if d:
+            self.txt_mc_dir.setText(self._to_relpath(d))
+
+    def _prepare_mc_grids(self):
+        """
+        Create N Monte Carlo realizations of every spectrum of this run, each one
+        sharing the mask of its spectrum, and their grid files (mc_grid_*.inp).
+        Returns the grid files, or None if the run should be aborted.
+        """
+        self._sync_config_from_ui()
+        spec_files, obs_dir = self._resolve_spectrum_files(
+            self.txt_obs_dir.text().strip(), self.combo_spec_ext.currentText().strip()
+        )
+        if not spec_files:
+            QMessageBox.warning(self, "Monte Carlo", "No spectrum found for the Monte Carlo realizations.")
+            return None
+
+        cfg = self.starlight_config
+        n = self.spin_mc_n.value()
+        mask_ext = cfg.mask_ext if cfg.mask_ext.startswith('.') else f".{cfg.mask_ext}"
+        masks = {
+            s: os.path.join(cfg.mask_dir or ".", os.path.splitext(os.path.basename(s))[0] + mask_ext)
+            for s in spec_files
+        }
+        missing = [m for m in masks.values() if not os.path.exists(m)]
+        if missing:
+            QMessageBox.critical(
+                self, "Monte Carlo — Missing Masks",
+                "Each spectrum needs its mask for the Monte Carlo realizations. Not found:\n"
+                + "\n".join(missing[:10]) + ("\n..." if len(missing) > 10 else "")
+            )
+            return None
+
+        reply = QMessageBox.question(
+            self, "Monte Carlo",
+            f"Monte Carlo errors: {len(spec_files)} spectrum(a) × {n} realizations = "
+            f"{len(spec_files) * n} additional STARLIGHT fits.\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+        )
+        if reply != QMessageBox.Yes:
+            return None
+
+        mc_dir = self.txt_mc_dir.text().strip() or "./mcmc"
+        grids = []
+        try:
+            for spec in spec_files:
+                job = prepare_monte_carlo(spec, cfg, n, mask_file=masks[spec], mc_dir=mc_dir)
+                self._mc_jobs.append(job)
+                grids += job['grids']
+                self.txt_log.append(
+                    f"🎲 Monte Carlo: {n} realizations of {os.path.basename(spec)} "
+                    f"(mask {os.path.basename(masks[spec])}) → {job['root']}"
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Monte Carlo Error", str(e))
+            for job in self._mc_jobs:
+                cleanup_mc_spectra(job)
+            self._mc_jobs = []
+            return None
+        return grids
+
+    def _finish_mc(self):
+        """Aggregate each Monte Carlo set: mean ± std table, and show it in Step 4."""
+        loaded = []
+        keep = self.chk_mc_keep.isChecked()
+        for job in self._mc_jobs:
+            base = job['base']
+            if not keep:
+                cleanup_mc_spectra(job)
+                self.txt_log.append(f"🧹 Monte Carlo {base}: perturbed spectra removed ({job['spec_dir']})")
+            done = [o for o in job['outs'] if os.path.exists(o)]
+            if len(done) < 2:
+                self.txt_log.append(f"⚠️ Monte Carlo {base}: only {len(done)} fit(s) produced — no statistics.")
+                continue
+            try:
+                mc = load_mc_outputs(done)
+                stats = mc_statistics(mc, self.pylight_config, self.sb_gal_dist.value())
+                table = os.path.join(job['root'], f"{base}_mc_props.csv")
+                write_mc_table(stats, table, name=base, pylight_config=self.pylight_config)
+                self.txt_log.append(f"📊 Monte Carlo {base}: mean ± std of {mc['n']} fits → {table}")
+                loaded.append(done)
+            except Exception as e:
+                self.txt_log.append(f"❌ Monte Carlo {base}: {e}")
+        self._mc_jobs = []
+        if len(loaded) == 1:
+            self.load_mc_set(loaded[0])
+
     def _on_stop_starlight_clicked(self):
         if hasattr(self, 'worker_thread') and self.worker_thread.isRunning():
             self.txt_log.append("🛑 Requesting execution cancellation...")
@@ -559,5 +694,7 @@ class GridMixin:
         self.btn_run_starlight.setEnabled(True)
         self.btn_stop_starlight.setEnabled(False)
         self.txt_log.append("STARLIGHT batch completed.")
+        if getattr(self, '_mc_jobs', None):
+            self._finish_mc()
         self.statusBar().showMessage("STARLIGHT batch finished.")
         QMessageBox.information(self, "Finished", "STARLIGHT run finished! Check Results tab to analyze fits.")
