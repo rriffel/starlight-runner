@@ -19,7 +19,7 @@ WORKDIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__
 # standard_mask: one mask file for all spectra (None: <mask_dir>/<spectrum><mask_ext>)
 paths = {
     'starlight_exe': 'StarlightChains_v04RR_25klines_1000Base.exe',
-    'obs_dir': '/home/riffel/Dropbox/programas/Develp/starlight-runner/aula/prepross',
+    'obs_dir': 'prepross',
     'spec_pattern': '.spec',
     'mask_dir': 'mask',
     'mask_ext': '.mask',

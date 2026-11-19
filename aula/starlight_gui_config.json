@@ -1,6 +1,6 @@
 {
     "exe": "StarlightChains_v04RR_25klines_1000Base.exe",
-    "obs_dir": "/home/riffel/Dropbox/programas/Develp/starlight-runner/aula/prepross",
+    "obs_dir": "prepross",
     "spec_ext": ".spec",
     "mask_dir": "mask",
     "mask_ext": ".mask",
