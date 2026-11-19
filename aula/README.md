@@ -15,31 +15,30 @@ STARLIGHT pela interface gráfica (STARLIGHT Runner).
 | `starlight_gui_config_aula.json` | configuração pronta da interface |
 | `run_starlight_aula.py` | a mesma configuração como script Python: roda sem a interface |
 
-## Instalação (uma vez)
-
-```bash
-conda activate starlight_env        # ou o ambiente onde o pacote está instalado
-cd <pasta do starlight-runner>
-pip install -e .
-```
-
 ## Rodando
 
-1. **Abra a interface de dentro desta pasta.** O STARLIGHT lê o `.config` e a
-   lista da base a partir da pasta onde foi aberto.
+1. **Baixe e descompacte a pasta da aula:**
+   [aula.tgz](https://github.com/rriffel/starlight-runner/raw/main/aula.tgz)
+
+   ```bash
+   tar xzf aula.tgz
+   ```
+
+2. **Abra a interface de dentro da pasta `aula`.** O STARLIGHT lê o `.config`
+   e a lista da base a partir da pasta onde foi aberto.
 
    ```bash
    cd aula
-   starlight-runner
+   starlight-runner-gui
    ```
 
-2. **Load Config State** → `starlight_gui_config_aula.json`.
+3. **Load Config State** → `starlight_gui_config_aula.json`.
 
-3. **Step 3 (STARLIGHT Grid)** → **Run STARLIGHT**. Responda *Yes* para gerar
+4. **Step 3 (STARLIGHT Grid)** → **Run STARLIGHT**. Responda *Yes* para gerar
    os grids. Os CSVs são convertidos sozinhos para `starlight_input/*.spec`, e
    os resultados saem em `out/`.
 
-4. **Step 4 (Results Analysis)**: abra os arquivos de `out/*.out`.
+5. **Step 4 (Results Analysis)**: abra os arquivos de `out/*.out`.
 
 O que a configuração define:
 
