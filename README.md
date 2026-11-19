@@ -257,6 +257,23 @@ print(f"Mean Z_L: {out.mean_z_l:.4f}")
 
 ---
 
+## 🧪 Worked Example: CSV spectrum + BC03 base (45 SSPs)
+
+[`examples/bc03_csv/`](examples/bc03_csv/) fits one of the CSV spectra in `testfiles/`
+with the 45-component `Base.BC03.N` of the official STARLIGHT v04 distribution.
+Place `StarlightChains_v04.Distrib.tar.bz2` in `examples/bc03_csv/` (or let the
+script download it) and run:
+
+```bash
+python examples/bc03_csv/run_example.py            # command line
+python examples/bc03_csv/run_example.py --setup    # prepare bases/masks for the GUI
+```
+
+See [`examples/bc03_csv/README.md`](examples/bc03_csv/README.md) for where the
+tarball goes and how to load the example in the GUI.
+
+---
+
 ## 📂 Repository Structure
 
 ```
