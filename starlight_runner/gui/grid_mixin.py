@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from . import constants
 
 from ..runner import StarlightConfig, generate_grid_files
+from ..spectrum_io import needs_conversion, DEFAULT_CONVERTED_DIR
 from ..custom_widgets import StarlightWorkerThread
 from ..montecarlo import (
     prepare_monte_carlo, cleanup_mc_spectra, load_mc_outputs, mc_statistics, write_mc_table,
@@ -539,6 +540,12 @@ class GridMixin:
 
         try:
             grids = generate_grid_files(spec_files, self.starlight_config)
+            n_conv = sum(needs_conversion(f) for f in spec_files)
+            if n_conv:
+                self.txt_log.append(
+                    f"🔄 {n_conv} spectrum(a) (CSV/header) converted to STARLIGHT ASCII .spec in "
+                    f"'{DEFAULT_CONVERTED_DIR}/' (used as obs_dir in the grids)."
+                )
             self.txt_log.append(f"✅ Generated {len(grids)} grid file(s) for {len(spec_files)} spectrum(a) in '{obs_dir}' ({ext_pattern}):")
             for g in grids:
                 self.txt_log.append(f"   • {g}")

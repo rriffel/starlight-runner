@@ -12,6 +12,8 @@ import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+from .spectrum_io import prepare_spectra_for_starlight, DEFAULT_CONVERTED_DIR
+
 
 DEFAULT_CONFIG_TEMPLATE = """# Configuration parameters for StarlightChains_v04.for
 #
@@ -125,7 +127,8 @@ def _to_rel_dir(d):
     return d
 
 
-def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="grid_", default_mask_file=None):
+def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="grid_", default_mask_file=None,
+                        converted_dir=DEFAULT_CONVERTED_DIR):
 
     """
     Generate STARLIGHT grid input files (e.g. grid_1.inp, grid_2.inp, ...)
@@ -135,6 +138,10 @@ def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="
     If ``default_mask_file`` is given, every spectrum uses that mask (its
     basename, which must live in ``config.mask_dir``) instead of the mask
     named after the spectrum (``<spectrum><mask_ext>``).
+
+    Spectra STARLIGHT cannot read directly (CSV files, files with a column
+    header) are converted to plain ASCII ``<name>.spec`` files in
+    ``converted_dir``, which then becomes the grid's obs_dir.
     
     Returns:
         list of generated grid file paths.
@@ -142,10 +149,14 @@ def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(config.out_dir, exist_ok=True)
     
+    if len(spec_files) == 0:
+        raise ValueError("No spectrum files provided for grid generation.")
+
+    spec_files, conv_dir = prepare_spectra_for_starlight(
+        spec_files, converted_dir, require_error=bool(int(config.is_err_available))
+    )
     sorted_files = sorted(spec_files, key=natural_sort_key)
     n_files = len(sorted_files)
-    if n_files == 0:
-        raise ValueError("No spectrum files provided for grid generation.")
 
     n_procs = min(config.procs, n_files)
     chunk_size = n_files // n_procs
@@ -155,7 +166,7 @@ def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="
     start_idx = 0
 
     b_dir = _to_rel_dir(config.base_dir)
-    o_dir = _to_rel_dir(config.obs_dir)
+    o_dir = _to_rel_dir(conv_dir if conv_dir else config.obs_dir)
     m_dir = _to_rel_dir(config.mask_dir)
     s_dir = _to_rel_dir(config.out_dir)
 

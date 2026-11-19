@@ -221,5 +221,53 @@ class TestMonteCarlo(unittest.TestCase):
         self.assertGreater(stats.at["xo", "mean"], 0.0)
 
 
+
+class TestCsvSpectra(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        self.csv = os.path.join(self.tmp, "gal.csv")
+        with open(self.csv, "w") as fh:
+            fh.write("wavelength,flux_mean,flux_err\n")
+            for i in range(20):
+                fh.write(f"{4000 + i:.1f},{1e-16 * (1 + i):.6e},{1e-17:.6e}\n")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_read_and_convert(self):
+        from starlight_runner.spectrum_io import read_spectrum_table, needs_conversion
+        self.assertTrue(needs_conversion(self.csv))
+        d = read_spectrum_table(self.csv)
+        self.assertEqual(d.shape, (20, 3))
+        self.assertAlmostEqual(d[0, 0], 4000.0)
+
+    def test_grid_uses_converted_spec(self):
+        conv = os.path.join(self.tmp, "conv")
+        cfg = StarlightConfig(obs_dir=self.tmp, out_dir=os.path.join(self.tmp, "out"), procs=1)
+        grids = generate_grid_files([self.csv], cfg, output_dir=self.tmp, converted_dir=conv)
+        text = open(grids[0]).read()
+        self.assertIn("gal.spec ", text)
+        data = np.loadtxt(os.path.join(conv, "gal.spec"))
+        self.assertEqual(data.shape, (20, 3))
+
+    def test_csv_without_errors_needs_err_flag_off(self):
+        two = os.path.join(self.tmp, "two.csv")
+        with open(two, "w") as fh:
+            fh.write("wavelength,flux_mean\n4000,1e-16\n4001,2e-16\n")
+        conv = os.path.join(self.tmp, "conv2")
+        out = os.path.join(self.tmp, "out")
+        with self.assertRaises(ValueError):
+            generate_grid_files([two], StarlightConfig(out_dir=out, procs=1, is_err_available=1),
+                                output_dir=self.tmp, converted_dir=conv)
+        generate_grid_files([two], StarlightConfig(out_dir=out, procs=1, is_err_available=0),
+                            output_dir=self.tmp, converted_dir=conv)
+
+    def test_mc_from_csv(self):
+        files = make_mc_spectra(self.csv, 2, out_dir=os.path.join(self.tmp, "mc"), seed=1)
+        self.assertTrue(all(f.endswith(".spec") for f in files))
+        self.assertIsNone(error_spectrum_problem(self.csv))
+
 if __name__ == "__main__":
     unittest.main()

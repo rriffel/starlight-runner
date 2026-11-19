@@ -38,6 +38,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from .spectrum_io import read_spectrum_table, needs_conversion
 from .runner import generate_grid_files, run_starlight_batch, natural_sort_key
 from .pylight_reader import (
     starlightPars, popVectors, StSyntesis, pylight_properties, format_pylight_value
@@ -65,7 +66,7 @@ def error_spectrum_problem(spec_path):
     with positive values); otherwise a short reason. Monte Carlo needs it.
     """
     try:
-        data = np.loadtxt(spec_path, comments='#', ndmin=2)
+        data = read_spectrum_table(spec_path)
     except Exception as exc:
         return f"cannot read {os.path.basename(spec_path)} ({exc})"
     if data.shape[1] < 3:
@@ -82,8 +83,9 @@ def make_mc_spectra(spec_path, n_sim, out_dir=None, seed=None):
     """
     Create ``n_sim`` perturbed copies of a STARLIGHT input spectrum.
 
-    The input is a whitespace table with columns lambda, flux, error
-    (and optionally flag). Each realization keeps lambda, error and flag and
+    The input is a whitespace or CSV table with columns lambda, flux, error
+    (and optionally flag); realizations are always written as whitespace
+    tables (``.spec`` when the input needed conversion, e.g. CSV). Each realization keeps lambda, error and flag and
     draws flux ~ N(flux, error); points with error <= 0 are left unperturbed.
 
     Returns the sorted list of written files ``<base>_mc0001<ext>``, ...
@@ -91,7 +93,7 @@ def make_mc_spectra(spec_path, n_sim, out_dir=None, seed=None):
     """
     if n_sim < 1:
         raise ValueError("n_sim must be >= 1")
-    data = np.loadtxt(spec_path, comments='#', ndmin=2)
+    data = read_spectrum_table(spec_path)
     if data.shape[1] < 3:
         raise ValueError(
             f"{spec_path}: Monte Carlo needs an error column (lambda flux error [flag]); "
@@ -111,6 +113,8 @@ def make_mc_spectra(spec_path, n_sim, out_dir=None, seed=None):
     paths = mc_paths(spec_path)
     base = paths['base']
     ext = os.path.splitext(spec_path)[1] or ".spec"
+    if needs_conversion(spec_path):
+        ext = ".spec"
     if out_dir is None:
         out_dir = paths['spec']
     os.makedirs(out_dir, exist_ok=True)
