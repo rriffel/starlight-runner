@@ -15,7 +15,8 @@ import matplotlib.pyplot as plt
 from . import constants
 
 from ..pylight_reader import (
-    starlightPars, popVectors, StSyntesis, pylight_properties, format_pylight_value
+    starlightPars, popVectors, StSyntesis, pylight_properties, format_pylight_value,
+    agn_fc_exponent, agn_bb_temperature
 )
 from ..montecarlo import load_mc_outputs, mc_statistics, mean_and_std, write_mc_table
 from ..custom_widgets import PylightConfigDialog
@@ -139,6 +140,8 @@ class ResultsMixin:
         return page
 
     def _open_pylight_config(self):
+        if hasattr(self, '_sync_pylight_zs'):
+            self._sync_pylight_zs()  # Zs from the Step 3 Base File
         dlg = PylightConfigDialog(self, self.pylight_config)
         if dlg.exec_() == QDialog.Accepted:
             self.pylight_config = dlg.config
@@ -155,6 +158,7 @@ class ResultsMixin:
             self.load_mc_set(files)
 
     def load_starlight_out(self, filepath):
+        self.results_files = [filepath]  # reopened by Load Config / Load Script
         try:
             # Use the PyLight standard reader
             pars, ParList, popin, popend, syntin, version = starlightPars(filepath)
@@ -210,13 +214,17 @@ class ResultsMixin:
 
             # Calculate mean ages and metallicities from pop arrays
             # pop columns: 0=x_j(%), 1=Mini_j(%), 2=Mcor_j(%), 3=age_j(yr), 4=Z_j, 5=(L/M)_j, 6=j
-            x_j = pop[:, 0]
-            mcor_j = pop[:, 2]
-            age_yr = pop[:, 3]
+            # AGN components always have Z = 0: means sum stellar populations only.
+            # Light: weights are fractions of the TOTAL light (FC included) -- not
+            # renormalized to the stellar light. Mass: AGN components have no mass.
+            stellar = pop[:, 4] > 0
+            x_j = pop[stellar, 0]
+            mcor_j = pop[stellar, 2]
+            age_yr = pop[stellar, 3]
             log_age = np.log10(np.where(age_yr > 0, age_yr, 1))
-            Z_j = pop[:, 4]
+            Z_j = pop[stellar, 4]
 
-            tot_x = np.sum(x_j)
+            tot_x = np.sum(pop[:, 0])
             tot_m = np.sum(mcor_j)
 
             mean_log_age_l = np.sum(x_j * log_age) / tot_x if tot_x > 0 else np.nan
@@ -248,6 +256,7 @@ class ResultsMixin:
 
     def load_mc_set(self, files):
         """Load N fits of the same galaxy and show mean ± error of every quantity."""
+        self.results_files = list(files)  # reopened by Load Config / Load Script
         try:
             mc = load_mc_outputs(files)
         except Exception as e:
@@ -460,7 +469,13 @@ class ResultsMixin:
             ax_pop_z.set_yticks([])
             ax_pop_z.spines['left'].set_visible(False)
             
-            zs = config.get('Zs', np.unique(Z_j))
+            # metallicities of the base (Step 3 Base File); if they do not
+            # match this fit's components, use the ones in the .out itself
+            zs = np.asarray(config.get('Zs') or [], dtype=float)
+            zs = zs[zs > 0]  # Z = 0 is always AGN, never a stellar metallicity
+            matches = zs.size and np.isclose(Z_j[:, None], zs[None, :], rtol=1e-4, atol=0).any()
+            if not matches:
+                zs = np.unique(Z_j[Z_j > 0])
             zscolor = ['#EF4444', '#D946EF', '#3B82F6', '#0F172A', '#06B6D4', '#10B981', '#F59E0B']
             zswidth = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
             zsun = config.get('zsun', 0.0152)
@@ -468,7 +483,7 @@ class ResultsMixin:
             c = 0
             p_y = 100
             for z in zs:
-                mask = Z_j == z
+                mask = np.isclose(Z_j, z, rtol=1e-4, atol=0)
                 if not np.any(mask): continue
                 color = zscolor[c % len(zscolor)]
                 width = zswidth[c % len(zswidth)]
@@ -528,27 +543,16 @@ class ResultsMixin:
                 bb, bb_idx = [], []
                 popComps = data.get('popComps', [])
                 
+                # agn_fc_<alpha> / agn_bb_<T> (same rules as pylight_reader / urutau)
                 for i, comp in enumerate(popComps):
-                    comp_str = str(comp).lower()
-                    if 'agn_fc_' in comp_str or 'power' in comp_str:
-                        try:
-                            import re
-                            match = re.search(r'[\d\.]+', comp_str)
-                            if match:
-                                val = float(match.group())
-                                if val > 10: val /= 100.0
-                                nu.append(val)
-                                fc_idx.append(i)
-                        except: pass
-                    elif 'agn_bb_' in comp_str or 'bb_' in comp_str:
-                        try:
-                            import re
-                            match = re.search(r'[\d\.]+', comp_str)
-                            if match:
-                                val = float(match.group())
-                                bb.append(val)
-                                bb_idx.append(i)
-                        except: pass
+                    alpha = agn_fc_exponent(comp)
+                    temp = agn_bb_temperature(comp)
+                    if alpha is not None:
+                        nu.append(alpha)
+                        fc_idx.append(i)
+                    elif temp is not None:
+                        bb.append(temp)
+                        bb_idx.append(i)
                         
                 if ax_agn_fc:
                     ax_agn_fc.spines['left'].set_visible(False)

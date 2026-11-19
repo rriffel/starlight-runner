@@ -127,7 +127,7 @@ def main():
         config_file=CONFIG_FILE,
         mask_dir="./",
         out_dir="out/",
-        llow_sn=4730.0, lupp_sn=4780.0,       # S/N window
+        llow_sn=4010.0, lupp_sn=4060.0,       # S/N window = normalization window of the .config
         olsyn_ini=3700.0, olsyn_fin=6900.0,   # fitted range (CSV covers 3700-6930 Å)
         delta_lamb=1.0,
         kinematics="FIT",

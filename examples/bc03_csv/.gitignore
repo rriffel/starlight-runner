@@ -5,6 +5,7 @@ starlight_input/
 out/
 grid_example_*.inp
 fit.png
-masks/
 grid_*.inp
-starlight_gui_config*.json
+
+# example GUI state (root .gitignore ignores starlight_gui_config*.json)
+!starlight_gui_config_bc03.json

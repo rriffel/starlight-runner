@@ -264,6 +264,108 @@ class TestCsvSpectra(unittest.TestCase):
         generate_grid_files([two], StarlightConfig(out_dir=out, procs=1, is_err_available=0),
                             output_dir=self.tmp, converted_dir=conv)
 
+    def test_grid_quotes_config_in_subdir(self):
+        cfg_dir = os.path.join(self.tmp, "cfg")
+        os.makedirs(cfg_dir)
+        for name in ("my.config", "MyBase"):
+            open(os.path.join(cfg_dir, name), "w").close()
+        cfg = StarlightConfig(out_dir=os.path.join(self.tmp, "out"), procs=1,
+                              config_file=os.path.join(cfg_dir, "my.config"),
+                              base_file=os.path.join(cfg_dir, "MyBase"))
+        grids = generate_grid_files([self.csv], cfg, output_dir=self.tmp,
+                                    converted_dir=os.path.join(self.tmp, "conv3"))
+        line = open(grids[0]).read().splitlines()[-1].split()
+        rel = os.path.relpath(cfg_dir).replace(os.sep, "/")
+        self.assertEqual(line[1], f"'{rel}/my.config'")
+        self.assertEqual(line[2], f"'{rel}/MyBase'")
+        local = generate_grid_files([self.csv], StarlightConfig(out_dir=os.path.join(self.tmp, "out"), procs=1),
+                                    output_dir=self.tmp, converted_dir=os.path.join(self.tmp, "conv4"))
+        self.assertIn(" StCv04.C99.config BasesFile ", open(local[0]).read())
+
+    def test_csv_without_errors_through_pipeline(self):
+        from starlight_runner.preprocessing import preprocess_pipeline, ensure_error_array
+        two = os.path.join(self.tmp, "noerr.csv")
+        with open(two, "w") as fh:
+            fh.write("wavelength,flux_mean\n")
+            for i in range(30):
+                fh.write(f"{4000 + i},{1e-16 * (1 + 0.01 * i):.6e}\n")
+        e, has = ensure_error_array(np.ones(3), None)
+        self.assertFalse(has)
+        self.assertEqual(len(e), 3)
+        out = os.path.join(self.tmp, "noerr.spec")
+        wl, flx, eflx = preprocess_pipeline(two, output_spec_path=out, av=0.3, rebin_step=1.0)
+        self.assertIsNone(eflx)
+        self.assertEqual(np.loadtxt(out).shape[1], 2)  # placeholder error not saved
+
+    def test_base_metallicities(self):
+        from starlight_runner.runner import base_metallicities
+        base = os.path.join(self.tmp, "MyBase")
+        with open(base, "w") as fh:
+            fh.write("4   [N_base]\n")
+            fh.write("a.spec 1e9 0.02 a 1 0 0\nb.spec 1e9 0.004 b 1 0 0\n")
+            fh.write("c.spec 1e10 0.02 c 1 0 0\nBB_800.dat 1.0 0.0000 bb 1 0 0\n")
+            fh.write("# trailing comment 0.5\n")
+        self.assertEqual(base_metallicities(base), [0.004, 0.02])
+        self.assertEqual(base_metallicities(os.path.join(self.tmp, "missing")), [])
+
+    def test_agn_nomenclature(self):
+        from starlight_runner.pylight_reader import (
+            agn_fc_exponent, agn_bb_temperature, is_agn_component, migrate_fc_bins, _component_values)
+        self.assertEqual(agn_fc_exponent("agn_fc_0.25"), 0.25)
+        self.assertEqual(agn_fc_exponent("AGN_FC_0.75"), 0.75)
+        self.assertIsNone(agn_fc_exponent("age020_m42"))
+        self.assertEqual(agn_bb_temperature("agn_bb_1200"), 1200.0)
+        for c in ("agn_bb_800", "agn_fc_0.5", "BB_800.dat", "Power_125.dat", "PL_1"):
+            self.assertTrue(is_agn_component(c), c)
+        self.assertFalse(is_agn_component("logT7.7_MHm0.6_"))
+        idx, vals = _component_values(["age020_m42", "agn_fc_0.25", "agn_fc_0.5", "agn_bb_800"], "fc")
+        self.assertEqual(list(idx), [1, 2])
+        self.assertEqual(list(vals), [0.25, 0.5])
+        cfg = {"BinFCVecLab": ["FC1.25", "FC1.50", "FC1.75", "FCTot"], "BinFCVec": {}}
+        self.assertTrue(migrate_fc_bins(cfg))
+        self.assertEqual(cfg["BinFCVecLab"][0], "FC0.25")
+        custom = {"BinFCVecLab": ["mine"], "BinFCVec": {"mine": [0, 2]}}
+        self.assertFalse(migrate_fc_bins(custom))
+
+    def test_script_roundtrip(self):
+        from starlight_runner.scripting import generate_script, import_script, resolve_spectra
+        state = {"exe": "star.exe", "obs_dir": "spectra", "spec_ext": "*.csv", "mask_dir": "mask",
+                 "mask_ext": ".mask", "std_mask_enabled": True, "std_mask_file": "std.gm",
+                 "config_file": "my.config", "base_dir": "BasesDir", "base_file": "Base.N",
+                 "out_dir": "out", "fit_ini": 3700.0, "fit_fin": 6900.0, "llow_norm": 5650.0,
+                 "lupp_norm": 5750.0, "kinematics": "FXK", "procs": 3, "is_err_available": 1,
+                 "is_flag_available": 0, "seed": 42, "mc_enabled": True, "mc_n": 20,
+                 "mc_dir": "mc", "mc_keep_spectra": True, "gal_dist": 12.5,
+                 "pylight_config": {"IsAGNComp": False, "zsun": 0.02},
+                 # Step 1 / Step 2
+                 "z": 0.0123, "law": "Calzetti (2000 Starburst)", "av": 0.35, "rv": 4.05,
+                 "rebin_step": 2.0, "trim_bounds_enabled": True, "trim_min": 3750.0, "trim_max": 6850.0,
+                 "telluric_cuts": [{"low": 5360.0, "upp": 5380.0, "name": "spike"}],
+                 "downgrade_res_enabled": True, "res_mode": 2, "res_ini": 2.5, "res_tgt": 6.0,
+                 "res_ini_is_file": False, "res_tgt_is_file": False, "preprocessing_apply": True,
+                 "masks": [{"low": 6550.0, "upp": 6580.0, "weight": 0.0, "name": "Ha"}]}
+        script = os.path.join(self.tmp, "run.py")
+        with open(script, "w") as fh:
+            fh.write(generate_script(state, workdir_rel="."))
+        got, warnings = import_script(script, gui_cwd=self.tmp)
+        self.assertEqual(warnings, [])
+        for k, v in state.items():
+            if k != "pylight_config":
+                self.assertEqual(got[k], v, k)
+        self.assertEqual(got["l_norm"], 5700.0)
+        self.assertEqual(got["pylight_config"]["zsun"], 0.02)
+        # scripts kept in another folder: paths rebased to the GUI folder
+        sub = os.path.join(self.tmp, "sub")
+        got2, warnings2 = import_script(script, gui_cwd=sub)
+        self.assertEqual(got2["obs_dir"], os.path.join("..", "spectra"))
+        self.assertTrue(warnings2)
+        # spectra resolution
+        os.makedirs(os.path.join(self.tmp, "sp"))
+        for n in ("b_2.csv", "b_10.csv", "b_1.csv", "x.mask"):
+            open(os.path.join(self.tmp, "sp", n), "w").close()
+        names = [os.path.basename(f) for f in resolve_spectra(os.path.join(self.tmp, "sp"), "*.csv")]
+        self.assertEqual(names, ["b_1.csv", "b_2.csv", "b_10.csv"])
+
     def test_mc_from_csv(self):
         files = make_mc_spectra(self.csv, 2, out_dir=os.path.join(self.tmp, "mc"), seed=1)
         self.assertTrue(all(f.endswith(".spec") for f in files))

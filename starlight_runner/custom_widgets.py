@@ -311,11 +311,22 @@ class PylightConfigDialog(QDialog):
         tab_gen = QWidget()
         form = QFormLayout(tab_gen)
         
-        self.le_zs = QLineEdit(", ".join(map(str, self.config.get("Zs", []))))
-        form.addRow("Metallicities (Zs) [comma separated]:", self.le_zs)
+        self.le_zs = QLineEdit(", ".join(f"{z:g}" for z in self.config.get("Zs", [])))
+        src = self.config.get("Zs_source")
+        if src:
+            # unique Z values of the Base File (Step 3): not edited here
+            self.le_zs.setReadOnly(True)
+            self.le_zs.setToolTip(f"Unique metallicities of the Base File: {src}\n"
+                                  "Change the Base File in Step 3 to change them.")
+            form.addRow("Metallicities (Zs) [from Base File]:", self.le_zs)
+            lbl_src = QLabel(src)
+            lbl_src.setStyleSheet("color: #94A3B8; font-size: 11px;")
+            form.addRow("", lbl_src)
+        else:
+            form.addRow("Metallicities (Zs) [comma separated]:", self.le_zs)
         
         self.chk_agn = QCheckBox()
-        self.chk_agn.setChecked(self.config.get("IsAGNComp", True))
+        self.chk_agn.setChecked(self.config.get("IsAGNComp", False))
         form.addRow("Is AGN Component:", self.chk_agn)
         
         self.chk_onlyfc = QCheckBox()
@@ -368,7 +379,8 @@ class PylightConfigDialog(QDialog):
     def _save(self):
         try:
             zs_str = self.le_zs.text().replace(' ', '')
-            self.config["Zs"] = [float(x) for x in zs_str.split(',') if x]
+            # Z = 0 is always an AGN component, never a stellar metallicity
+            self.config["Zs"] = [z for z in (float(x) for x in zs_str.split(',') if x) if z > 0]
             self.config["IsAGNComp"] = self.chk_agn.isChecked()
             self.config["OnlyFC"] = self.chk_onlyfc.isChecked()
             self.config["pltmask"] = self.chk_pltmask.isChecked()
@@ -699,6 +711,10 @@ class InteractiveMaskDialog(QDialog):
         if filepath:
             try:
                 self.spectral_mask.save_to_file(filepath)
+                # remember it: closing the dialog re-saves here and the main
+                # window points its mask directory to this folder
+                self.saved_mask_path = filepath
+                self.default_mask_path = filepath
                 self.lbl_status.setText(f"Mask saved to {os.path.basename(filepath)}.")
                 QMessageBox.information(self, "Mask Saved", f"Mask file successfully saved:\n{filepath}")
             except Exception as e:

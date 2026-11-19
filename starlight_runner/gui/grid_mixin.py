@@ -1,5 +1,5 @@
 """Auto-generated mixin module for Starlight Runner GUI."""
-import sys, os, glob, json, re, traceback
+import sys, os, glob, json, re, traceback, copy
 import numpy as np
 import pandas as pd
 
@@ -14,7 +14,9 @@ import matplotlib.pyplot as plt
 
 from . import constants
 
-from ..runner import StarlightConfig, generate_grid_files
+from ..runner import (StarlightConfig, generate_grid_files, read_config_norm, config_for_norm,
+                      write_config_with_norm, norm_from_window, base_metallicities,
+                      NORM_NIR, NORM_OPTICAL)
 from ..spectrum_io import needs_conversion, DEFAULT_CONVERTED_DIR
 from ..custom_widgets import StarlightWorkerThread
 from ..montecarlo import (
@@ -87,6 +89,24 @@ class GridMixin:
         self.txt_mask_ext.setPlaceholderText(".mask")
         f_paths.addRow("Mask Extension:", self.txt_mask_ext)
 
+        # Standard mask: the same mask file for every spectrum
+        self.chk_std_mask = QCheckBox("Use standard mask (same for all spectra)")
+        self.chk_std_mask.setToolTip(
+            "Every spectrum uses the chosen mask file instead of <spectrum><mask extension>\n"
+            "from the Masks Directory (also for the Monte Carlo realizations)."
+        )
+        f_paths.addRow("Standard Mask:", self.chk_std_mask)
+        row_std_mask = QHBoxLayout()
+        self.txt_std_mask = QLineEdit("")
+        self.txt_std_mask.setPlaceholderText("Mask file used for all spectra")
+        self.btn_std_mask = QPushButton("Choose…")
+        self.btn_std_mask.clicked.connect(self._on_choose_std_mask)
+        row_std_mask.addWidget(self.txt_std_mask)
+        row_std_mask.addWidget(self.btn_std_mask)
+        f_paths.addRow("", row_std_mask)
+        self.chk_std_mask.toggled.connect(self._on_toggle_std_mask)
+        self._on_toggle_std_mask(False)
+
         # Configuration File with Browse button
         row_config = QHBoxLayout()
         self.txt_config_file = QLineEdit(self.starlight_config.config_file)
@@ -119,6 +139,7 @@ class GridMixin:
         row_base_file.addWidget(self.txt_base_file)
         row_base_file.addWidget(btn_browse_base_file)
         f_paths.addRow("Base File:", row_base_file)
+        self.txt_base_file.editingFinished.connect(self._sync_pylight_zs)
 
         # Output Directory with Browse button
         row_out = QHBoxLayout()
@@ -151,15 +172,36 @@ class GridMixin:
         self.spin_fit_fin.setValue(self.starlight_config.olsyn_fin)
         f_pars.addRow("Fit λ Upper (Å):", self.spin_fit_fin)
 
-        self.spin_sn_low = QDoubleSpinBox()
-        self.spin_sn_low.setRange(100.0, 50000.0)
-        self.spin_sn_low.setValue(self.starlight_config.llow_sn)
-        f_pars.addRow("S/N Window Lower (Å):", self.spin_sn_low)
 
-        self.spin_sn_upp = QDoubleSpinBox()
-        self.spin_sn_upp.setRange(100.0, 50000.0)
-        self.spin_sn_upp.setValue(self.starlight_config.lupp_sn)
-        f_pars.addRow("S/N Window Upper (Å):", self.spin_sn_upp)
+        # Normalization window = S/N window: the same two values go to the grid
+        # (llow_SN, lupp_SN) and to the .config (llow_norm, lupp_norm);
+        # l_norm of the bases is their mean.
+        norm = read_config_norm(self.starlight_config.config_file) or NORM_NIR
+        self.spin_l_norm = QDoubleSpinBox()
+        self.spin_l_norm.setRange(100.0, 50000.0)
+        self.spin_l_norm.setReadOnly(True)
+        self.spin_l_norm.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.spin_l_norm.setToolTip("[l_norm] normalization lambda of the base spectra (.config):\n"
+                                    "always the mean of the observed normalization window, (llow_norm + lupp_norm) / 2")
+        f_pars.addRow("Norm λ for Bases (Å):", self.spin_l_norm)
+        self.spin_llow_norm = QDoubleSpinBox()
+        self.spin_llow_norm.setRange(100.0, 50000.0)
+        self.spin_llow_norm.setValue(norm[1])
+        self.spin_llow_norm.setToolTip("Lower limit of the normalization window of the observed spectrum:\n"
+                                       "[llow_norm] in the .config and [llow_SN] (S/N window) in the grid")
+        f_pars.addRow("Norm Window Lower (Å):", self.spin_llow_norm)
+        self.spin_lupp_norm = QDoubleSpinBox()
+        self.spin_lupp_norm.setRange(100.0, 50000.0)
+        self.spin_lupp_norm.setValue(norm[2])
+        self.spin_lupp_norm.setToolTip("Upper limit of the normalization window of the observed spectrum:\n"
+                                       "[lupp_norm] in the .config and [lupp_SN] (S/N window) in the grid.\n"
+                                       "If they differ from the .config you are asked, when generating grids,\n"
+                                       "whether to update it; otherwise a copy is written in starlight_input/.")
+        f_pars.addRow("Norm Window Upper (Å):", self.spin_lupp_norm)
+        for w in (self.spin_llow_norm, self.spin_lupp_norm):
+            w.valueChanged.connect(self._update_l_norm)
+        self._update_l_norm()
+        self.txt_config_file.editingFinished.connect(self._sync_norm_from_config_file)
 
         self.combo_kinematics = QComboBox()
         self.combo_kinematics.addItems(["FIT", "FXK"])
@@ -347,19 +389,165 @@ class GridMixin:
             self.txt_mask_dir_step2.blockSignals(False)
         self.starlight_config.mask_dir = text
 
-    def _on_browse_mask_file(self):
-        f, _ = QFileDialog.getOpenFileName(self, "Select STARLIGHT Mask File", self.txt_mask_file.text(), "All Files (*);;Starlight Mask (*.mask)")
+    def _update_l_norm(self, *_):
+        """l_norm (bases) = mean of the observed normalization window."""
+        self.spin_l_norm.setValue(norm_from_window(self.spin_llow_norm.value(), self.spin_lupp_norm.value())[0])
+
+    def _sync_pylight_zs(self, *_):
+        """PyLight metallicities (Zs) = unique Z values of the Step 3 Base File."""
+        zs = base_metallicities(self.txt_base_file.text().strip()) if hasattr(self, 'txt_base_file') else []
+        if zs:
+            self.pylight_config["Zs"] = zs
+            self.pylight_config["Zs_source"] = self.txt_base_file.text().strip()
+        return zs
+
+    def _sync_norm_from_config_file(self, *_):
+        """
+        Show the normalization window of the chosen .config in Step 3 (l_norm
+        follows as its mean). Differences with the file are only reported when
+        grids are generated / STARLIGHT is run (_check_norm_against_config).
+        """
+        norm = read_config_norm(self.txt_config_file.text().strip())
+        if norm and hasattr(self, 'spin_l_norm'):
+            self.spin_llow_norm.setValue(norm[1])
+            self.spin_lupp_norm.setValue(norm[2])
+            self._update_l_norm()
+
+    def _current_norm(self):
+        return (self.spin_l_norm.value(), self.spin_llow_norm.value(), self.spin_lupp_norm.value())
+
+    def _check_norm_against_config(self, reason=""):
+        """
+        Compare the Step 3 normalization with the chosen .config. If they
+        differ, show the .config values and ask whether to write the Step 3
+        values into it (a .bak copy is kept). If not, the file is left as it
+        is (grids then use a copy in starlight_input/) and the same values
+        are not asked again. Returns True if the .config matches afterwards.
+        """
+        if not hasattr(self, 'spin_l_norm'):
+            return True
+        path = self.txt_config_file.text().strip()
+        file_norm = read_config_norm(path) if path else None
+        if file_norm is None:
+            return True
+        cur = self._current_norm()
+        if all(abs(a - b) < 1e-6 for a, b in zip(file_norm, cur)):
+            return True
+        file_mean = norm_from_window(file_norm[1], file_norm[2])[0]
+        if abs(file_norm[0] - file_mean) > 1e-6:
+            reason = (reason + "\n" if reason else "") + (
+                f"Note: in the configuration file l_norm = {file_norm[0]:.1f} Å is not the mean of its "
+                f"normalization window ({file_norm[1]:.1f}-{file_norm[2]:.1f} Å → {file_mean:.1f} Å).")
+        if getattr(self, '_norm_declined', None) == (os.path.abspath(path), cur):
+            return False
+
+        reply = QMessageBox.question(
+            self, "Normalization differs from the configuration file",
+            (f"{reason}\n\n" if reason else "")
+            + f"Configuration file: {path}\n"
+            f"   l_norm = {file_norm[0]:.1f} Å   llow_norm = {file_norm[1]:.1f} Å   lupp_norm = {file_norm[2]:.1f} Å\n\n"
+            f"Step 3 (Synthesis Parameters):\n"
+            f"   l_norm = {cur[0]:.1f} Å   llow_norm = {cur[1]:.1f} Å   lupp_norm = {cur[2]:.1f} Å\n\n"
+            "(l_norm of the bases = mean of the normalization window.)\n\n"
+            "Update the configuration file with the Step 3 values?\n"
+            "(Yes: the file is rewritten, a copy is kept as .bak.\n"
+            " No: the file is not changed; the grids use a copy with the Step 3 values.)",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                import shutil
+                shutil.copyfile(path, path + ".bak")
+                write_config_with_norm(path, path, *cur)
+                self._norm_declined = None
+                msg = f"Configuration file updated: {path} (backup {path}.bak)"
+                self.statusBar().showMessage(msg)
+                if hasattr(self, 'txt_log'):
+                    self.txt_log.append(f"📐 {msg} — normalization {cur}")
+                return True
+            except Exception as e:
+                QMessageBox.critical(self, "Configuration file", f"Could not update {path}:\n{e}")
+                return False
+        self._norm_declined = (os.path.abspath(path), cur)
+        return False
+
+    def _apply_synthesis_preset(self, kind, wl_range=None):
+        """
+        Step 3 defaults for a Step 2 mask preset. Fit range = spectrum start + 50 Å
+        to end - 50 Å (spectrum saved in Step 1). NIR keeps the standard
+        windows (S/N & normalization 12200-12250 Å, l_norm 12225 Å); optical
+        normalizes (and measures S/N) at 5650-5750 Å, l_norm 5700 Å.
+        Returns a short description of what was set.
+        """
+        if not hasattr(self, 'spin_fit_ini'):
+            return ""
+        kind = (kind or "").lower()
+        norm = NORM_OPTICAL if kind == "optical" else NORM_NIR
+        done = []
+        if wl_range is not None and wl_range[1] - wl_range[0] > 100.0:
+            lo, hi = float(wl_range[0]) + 50.0, float(wl_range[1]) - 50.0
+            self.spin_fit_ini.setValue(lo)
+            self.spin_fit_fin.setValue(hi)
+            done.append(f"fit {lo:.0f}-{hi:.0f} Å")
+        self.spin_llow_norm.setValue(norm[1])
+        self.spin_lupp_norm.setValue(norm[2])
+        self._update_l_norm()
+        done.append(f"normalization (S/N) window {norm[1]:.0f}-{norm[2]:.0f} Å, l_norm {norm[0]:.0f} Å")
+        if wl_range is not None and not (wl_range[0] <= norm[1] and norm[2] <= wl_range[1]):
+            done.append(f"⚠️ normalization window outside the spectrum ({wl_range[0]:.0f}-{wl_range[1]:.0f} Å)")
+        self._sync_config_from_ui()
+        return "; ".join(done)
+
+    def _effective_config(self):
+        """
+        Copy of the run configuration with the normalization of the Step 3
+        fields: if it differs from the .config, a copy of the .config with it
+        is written in starlight_input/ and used (the original is not modified).
+        """
+        cfg = copy.deepcopy(self.starlight_config)
+        if hasattr(self, 'spin_l_norm') and os.path.isfile(cfg.config_file):
+            cfg.config_file = config_for_norm(cfg.config_file, self._current_norm(), DEFAULT_CONVERTED_DIR)
+        return cfg
+
+    def _on_toggle_std_mask(self, checked):
+        """Standard mask on: choose one file; per-spectrum mask folder/extension are not used."""
+        self.txt_std_mask.setEnabled(checked)
+        self.btn_std_mask.setEnabled(checked)
+        self.txt_mask_dir_step3.setEnabled(not checked)
+        self.txt_mask_ext.setEnabled(not checked)
+        if checked and not self.txt_std_mask.text().strip():
+            self._on_choose_std_mask()
+            if not self.txt_std_mask.text().strip():
+                self.chk_std_mask.setChecked(False)
+
+    def _on_choose_std_mask(self):
+        start = self.txt_std_mask.text().strip() or self.txt_mask_dir_step3.text().strip() or "."
+        f, _ = QFileDialog.getOpenFileName(
+            self, "Choose the Standard Mask (used for all spectra)", start,
+            "Starlight Mask (*.mask *.gm *.msk);;All Files (*)"
+        )
         if f:
-            rel = os.path.basename(f) if os.path.dirname(os.path.abspath(f)) == os.getcwd() else self._to_relpath(f)
-            self.txt_mask_file.setText(rel)
-            self.starlight_config.mask_file = rel
+            self.txt_std_mask.setText(self._to_relpath(f))
+
+    def _standard_mask_file(self):
+        """Path of the standard mask if that option is on, else None (raises if missing)."""
+        if not (hasattr(self, 'chk_std_mask') and self.chk_std_mask.isChecked()):
+            return None
+        path = self.txt_std_mask.text().strip()
+        if not path:
+            raise ValueError("'Use standard mask' is on but no mask file was chosen.")
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Standard mask not found: {path}")
+        return path
 
     def _on_browse_config_file(self):
         f, _ = QFileDialog.getOpenFileName(self, "Select Configuration File (.config)", self.txt_config_file.text(), "All Files (*);;Config Files (*.config)")
         if f:
-            rel = os.path.basename(f)
+            # relative path: the grid quotes it when the file is in another folder
+            rel = self._to_relpath(f)
             self.txt_config_file.setText(rel)
             self.starlight_config.config_file = rel
+            self._sync_norm_from_config_file()
 
     def _on_browse_base_dir(self):
         d = QFileDialog.getExistingDirectory(self, "Select Base Populations Directory", self.txt_base_dir.text())
@@ -371,9 +559,11 @@ class GridMixin:
     def _on_browse_base_file(self):
         f, _ = QFileDialog.getOpenFileName(self, "Select Base File (e.g. BasesXSLKrupaPCRR, BaseHRpyPopStarChab)", self.txt_base_file.text(), "All Files (*)")
         if f:
-            rel = os.path.basename(f)
+            # relative path: the grid quotes it when the file is in another folder
+            rel = self._to_relpath(f)
             self.txt_base_file.setText(rel)
             self.starlight_config.base_file = rel
+            self._sync_pylight_zs()
 
     def _on_browse_out_dir(self):
         d = QFileDialog.getExistingDirectory(self, "Select Output Directory", self.txt_out_dir.text())
@@ -395,8 +585,9 @@ class GridMixin:
         self.starlight_config.out_dir = self.txt_out_dir.text().strip()
         self.starlight_config.olsyn_ini = self.spin_fit_ini.value()
         self.starlight_config.olsyn_fin = self.spin_fit_fin.value()
-        self.starlight_config.llow_sn = self.spin_sn_low.value()
-        self.starlight_config.lupp_sn = self.spin_sn_upp.value()
+        # S/N window of the grid = normalization window
+        self.starlight_config.llow_sn = self.spin_llow_norm.value()
+        self.starlight_config.lupp_sn = self.spin_lupp_norm.value()
         self.starlight_config.kinematics = self.combo_kinematics.currentText()
         self.starlight_config.is_err_available = 1 if self.chk_err_spec.isChecked() else 0
         self.starlight_config.is_flag_available = 1 if self.chk_flag_spec.isChecked() else 0
@@ -539,7 +730,17 @@ class GridMixin:
             return
 
         try:
-            grids = generate_grid_files(spec_files, self.starlight_config)
+            std_mask = self._standard_mask_file()
+            self._check_norm_against_config("Generating grids.")
+            cfg = self._effective_config()
+            if cfg.config_file != self.starlight_config.config_file:
+                self.txt_log.append(f"📐 Normalization {self._current_norm()} → using {cfg.config_file}")
+            if std_mask:
+                # STARLIGHT reads <mask_dir>/<mask name>: point mask_dir to the standard mask's folder
+                cfg.mask_dir = os.path.dirname(std_mask) or "."
+            grids = generate_grid_files(spec_files, cfg, default_mask_file=std_mask)
+            if std_mask:
+                self.txt_log.append(f"🎭 Standard mask for all spectra: {std_mask}")
             n_conv = sum(needs_conversion(f) for f in spec_files)
             if n_conv:
                 self.txt_log.append(
@@ -573,7 +774,8 @@ class GridMixin:
 
         if reply == QMessageBox.Cancel:
             return
-        elif reply == QMessageBox.Yes:
+        self._check_norm_against_config("Running STARLIGHT.")
+        if reply == QMessageBox.Yes:
             self._on_generate_grids()
             self._on_save_config_state()
 
@@ -660,11 +862,16 @@ class GridMixin:
             self._update_mc_availability()
             return None
 
-        cfg = self.starlight_config
+        cfg = self._effective_config()
         n = self.spin_mc_n.value()
+        try:
+            std_mask = self._standard_mask_file()
+        except Exception as e:
+            QMessageBox.critical(self, "Monte Carlo", str(e))
+            return None
         mask_ext = cfg.mask_ext if cfg.mask_ext.startswith('.') else f".{cfg.mask_ext}"
         masks = {
-            s: os.path.join(cfg.mask_dir or ".", os.path.splitext(os.path.basename(s))[0] + mask_ext)
+            s: std_mask or os.path.join(cfg.mask_dir or ".", os.path.splitext(os.path.basename(s))[0] + mask_ext)
             for s in spec_files
         }
         missing = [m for m in masks.values() if not os.path.exists(m)]

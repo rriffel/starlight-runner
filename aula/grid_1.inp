@@ -1,0 +1,17 @@
+2
+BasesDir/                               [base_dir]
+prepross/                               [obs_dir]
+mask/                                   [mask_dir]
+synt/                                   [out_dir]
+33087221                                [your phone number]
+5650.0                                  [llow_SN]   lower-lambda of S/N window
+5750.0                                  [lupp_SN]   upper-lambda of S/N window
+3750.0                                  [Olsyn_ini] lower-lambda for fit
+6880.0                                  [Olsyn_fin] upper-lambda for fit
+1.0                                     [Odlsyn]    delta-lambda for fit
+1.0                                     [fscale_chi2] fudge-factor for chi2
+FIT                                     [FIT/FXK] Fit or Fix kinematics
+0                                       [IsErrSpecAvailable]  1/0 = Yes/No
+0                                       [IsFlagSpecAvailable] 1/0 = Yes/No
+IntegratedSpec_r_2.0_0_clean.spec StCv04.C99.config Base.BC03.N IntegratedSpec_r_2.0_0_clean.mask CCM 0.0 150.0 IntegratedSpec_r_2.0_0_clean.out
+IntegratedSpec_r_2.0_3_prepross.spec StCv04.C99.config Base.BC03.N IntegratedSpec_r_2.0_3_prepross.mask CCM 0.0 150.0 IntegratedSpec_r_2.0_3_prepross.out

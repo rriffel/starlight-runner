@@ -122,7 +122,8 @@ def popVectors(filein):
                 z_j = float(tokens[5])
                 lm_j = float(tokens[6])
                 pop_list.append([x_j, mini_j, mcor_j, age_j, z_j, lm_j, j])
-                comp = tokens[8] if len(tokens) > 8 else (tokens[7] if len(tokens) > 7 else f"ssp_{int(j)}")
+                # columns: j x_j Mini_j Mcor_j age_j Z_j (L/M)_j YAV? Mstars component_j a/Fe ...
+                comp = tokens[9] if len(tokens) > 9 else (tokens[-1] if len(tokens) > 7 else f"ssp_{int(j)}")
                 comps_list.append(comp)
             except ValueError:
                 continue
@@ -169,25 +170,92 @@ def _get_par(pars, ParList, name):
     return np.nan
 
 
-def _component_values(components, tag):
-    """Indices and numeric values (alpha or T) of AGN components whose label contains ``tag``."""
-    import re
+# AGN components (same nomenclature and rules as urutau's starlight wrapper):
+#   featureless continuum  agn_fc_<alpha>   (alpha = 0.25, 0.5, 0.75)
+#   hot dust black body    agn_bb_<T in K>
+# Stellar populations exclude every component whose name starts with one of
+# _AGN_PREFIXES (legacy BB_/Power_/PL_ names included).
+_AGN_PREFIXES = ("agn_bb", "bb", "agn_fc", "power", "pl_")
+
+# Default FC bins for the agn_fc_<alpha> nomenclature, (min, max] in alpha
+DEFAULT_FC_BINS_LAB = ['FC0.25', 'FC0.50', 'FC0.75', 'FCTot']
+DEFAULT_FC_BINS = {'FC0.25': [0.0, 0.25], 'FC0.50': [0.25, 0.50], 'FC0.75': [0.50, 0.75], 'FCTot': [0.0, 0.75]}
+_LEGACY_FC_BINS_LAB = ['FC1.25', 'FC1.50', 'FC1.75', 'FCTot']
+
+
+def default_pylight_config():
+    """Default PyLight configuration (GUI and scripting API). Zs are replaced by the Base File's."""
+    return {
+        'Zs': [0.00382, 0.00959, 0.0152, 0.02409],
+        'IsAGNComp': False,  # AGN components (FC, hot dust) off by default
+        'OnlyFC': False,
+        'pltmask': False,
+        'NormFac': 1,
+        'SaveDist': True,
+        'zsun': 0.0152,
+        'BinPopVecLab': ['xy', 'xiy', 'xio', 'xo'],
+        'BinPopVecMassLab': ['my', 'miy', 'mio', 'mo'],
+        'BinPopVec': {'xy': [1E3, 100e6], 'xiy': [101e6, 700e6], 'xio': [750E6, 2E9], 'xo': [2.10e9, 15e9]},
+        'BinSFRLabs': ['SFR_1E6', 'SFR_5E6', 'SFR_10E6', 'SFR_14E6', 'SFR_20E6', 'SFR_30E6', 'SFR_56E6', 'SFR_100E6', 'SFR_200E6'],
+        'BinSFR': {"SFR_1E6": [10,1.001E6], "SFR_5E6": [10,5.621E6], "SFR_10E6": [10,10.001E6],"SFR_14E6":[10,14.1001E6],"SFR_20E6": [10,20.001E6],"SFR_30E6": [10,31.6001E6],"SFR_56E6": [10,56.201E6],"SFR_100E6":[10,100.001E6],"SFR_200E6": [10,200.001E6]},
+        'BinHDVecLab': ['BB_c', 'BB_h', 'HDTot'],
+        'BinHDVec': {'BB_c': [0, 1000], 'BB_h': [1000, 1500], 'HDTot': [0, 1500]},
+        # FC bins in alpha of the agn_fc_<alpha> components (0.25, 0.5, 0.75), (min, max]
+        'BinFCVecLab': ['FC0.25', 'FC0.50', 'FC0.75', 'FCTot'],
+        'BinFCVec': {'FC0.25': [0.0, 0.25], 'FC0.50': [0.25, 0.50], 'FC0.75': [0.50, 0.75], 'FCTot': [0.0, 0.75]}
+    }
+
+
+def is_agn_component(comp):
+    """True for AGN components (featureless continuum or hot-dust black body)."""
+    return str(comp).strip().lower().startswith(_AGN_PREFIXES)
+
+
+def agn_fc_exponent(comp):
+    """alpha of an ``agn_fc_<alpha>`` component, else None."""
+    c = str(comp).strip().lower()
+    if not c.startswith("agn_fc_"):
+        return None
+    try:
+        return float(c[len("agn_fc_"):])
+    except ValueError:
+        return None
+
+
+def agn_bb_temperature(comp):
+    """T (K) of an ``agn_bb_<T>`` component, else None."""
+    c = str(comp).strip().lower()
+    if not c.startswith("agn_bb_"):
+        return None
+    try:
+        return float(c[len("agn_bb_"):])
+    except ValueError:
+        return None
+
+
+def migrate_fc_bins(config):
+    """
+    Replace the legacy default FC bins (FC1.25/1.50/1.75, from the old
+    Power_125... names) by the agn_fc_<alpha> ones (FC0.25/0.50/0.75).
+    Custom bins are kept. Returns True if the config was changed.
+    """
+    if config.get('BinFCVecLab') == _LEGACY_FC_BINS_LAB:
+        config['BinFCVecLab'] = list(DEFAULT_FC_BINS_LAB)
+        config['BinFCVec'] = {k: list(v) for k, v in DEFAULT_FC_BINS.items()}
+        return True
+    return False
+
+
+def _component_values(components, kind):
+    """Indices and values (alpha for kind='fc', T for kind='bb') of the AGN components."""
+    get = agn_fc_exponent if kind == 'fc' else agn_bb_temperature
     idx, vals = [], []
     for i, comp in enumerate(components):
-        comp_str = str(comp)
-        if tag not in comp_str:
-            continue
-        ptmp = re.split(r'_', comp_str)
-        try:
-            v = float(ptmp[1])
-        except (IndexError, ValueError):
-            match = re.search(r'[\d\.]+', comp_str)
-            v = float(match.group()) if match else 0
-        if tag == 'Power':
-            v /= 100.0
-        idx.append(i)
-        vals.append(v)
-    return np.array(idx, dtype=int), np.array(vals)
+        v = get(comp)
+        if v is not None:
+            idx.append(i)
+            vals.append(v)
+    return np.array(idx, dtype=int), np.array(vals, dtype=float)
 
 
 def pylight_properties(pars, ParList, pop, popComps, version, config, gal_dist=0.0):
@@ -230,17 +298,20 @@ def pylight_properties(pars, ParList, pop, popComps, version, config, gal_dist=0
         else:
             Mini_t = Mcor_t = np.nan
 
-    # --- Mean ages and metallicities (excluding AGN components) ---
-    sumvec = [i for i, comp in enumerate(components)
-              if 'BB_' not in str(comp) and 'Power' not in str(comp)]
+    # --- Mean ages and metallicities (excluding AGN components: agn_fc_/agn_bb_..., always Z = 0) ---
+    stellar = np.array([not is_agn_component(c) for c in components], dtype=bool) & (Z_j > 0)
+    sumvec = [i for i in range(len(components)) if stellar[i]]
     sumvec = np.array(sumvec, dtype=int) if len(sumvec) > 0 else np.arange(len(popx))
 
     log_age = np.log10(np.where(age_yr > 0, age_yr, 1))
     px_s, pm_s = popx[sumvec], popm[sumvec]
     la_s, z_s = log_age[sumvec], Z_j[sumvec]
     sum_px_s, sum_pm_s = np.sum(px_s), np.sum(pm_s)
-    meanAgex = np.sum((px_s / sum_px_s) * la_s) if sum_px_s > 0 else np.nan
-    meanZx = np.sum((px_s / sum_px_s) * z_s) if sum_px_s > 0 else np.nan
+    # Light-weighted means are NOT renormalized to the stellar light: popx is the
+    # fraction of the total light (FC included, sums to 100), so the FC light
+    # stays in the budget and the stellar weights add up to < 100 %.
+    meanAgex = np.sum((px_s / 100.0) * la_s) if np.sum(popx) > 0 else np.nan
+    meanZx = np.sum((px_s / 100.0) * z_s) if np.sum(popx) > 0 else np.nan
     meanAgem = np.sum((pm_s / sum_pm_s) * la_s) if sum_pm_s > 0 else np.nan
     meanZm = np.sum((pm_s / sum_pm_s) * z_s) if sum_pm_s > 0 else np.nan
 
@@ -248,13 +319,13 @@ def pylight_properties(pars, ParList, pop, popComps, version, config, gal_dist=0
 
     # --- AGN FC and hot-dust bins ---
     if config.get('IsAGNComp', False):
-        fcind, nu_vals = _component_values(components, 'Power')
+        fcind, nu_vals = _component_values(components, 'fc')
         for fc_label in config.get('BinFCVecLab', []):
             bounds = config.get('BinFCVec', {}).get(fc_label, [0, 0])
             fc_mask = (nu_vals > bounds[0]) & (nu_vals <= bounds[1])
             out[fc_label] = float(np.sum(popx[fcind][fc_mask])) if len(fcind) else 0.0
 
-        hdind, bb_vals = _component_values(components, 'BB_')
+        hdind, bb_vals = _component_values(components, 'bb')
         for hd_label in config.get('BinHDVecLab', []):
             bounds = config.get('BinHDVec', {}).get(hd_label, [0, 0])
             hd_mask = (bb_vals > bounds[0]) & (bb_vals <= bounds[1])
@@ -265,11 +336,11 @@ def pylight_properties(pars, ParList, pop, popComps, version, config, gal_dist=0
     pop_labels = config.get('BinPopVecLab', list(bin_pop_vec.keys()))
     for label in pop_labels:
         bounds = bin_pop_vec.get(label, [0, 0])
-        mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
+        mask = (age_yr > bounds[0]) & (age_yr <= bounds[1]) & stellar
         out[label] = float(np.sum(popx[mask]))
     for idx_m, label in enumerate(config.get('BinPopVecMassLab', [])):
         bounds = bin_pop_vec.get(pop_labels[idx_m], [0, 0]) if idx_m < len(pop_labels) else [0, 0]
-        mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
+        mask = (age_yr > bounds[0]) & (age_yr <= bounds[1]) & stellar
         out[label] = float(np.sum(popm[mask]))
 
     # --- Physical properties ---
@@ -285,7 +356,7 @@ def pylight_properties(pars, ParList, pop, popComps, version, config, gal_dist=0
     bin_sfr = config.get('BinSFR', {})
     for sfr_label in config.get('BinSFRLabs', list(bin_sfr.keys())):
         bounds = bin_sfr.get(sfr_label, [0, 0])
-        mask = (age_yr > bounds[0]) & (age_yr <= bounds[1])
+        mask = (age_yr > bounds[0]) & (age_yr <= bounds[1]) & stellar
         SF = bounds[1] - bounds[0]
         if SF > 0 and not np.isnan(Mini_t):
             out[sfr_label] = ((np.sum(popMi_norm[mask]) / 100.0) * Mini_t) / SF

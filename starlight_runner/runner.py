@@ -127,6 +127,106 @@ def _to_rel_dir(d):
     return d
 
 
+# Normalization windows (STARLIGHT .config: l_norm, llow_norm, lupp_norm)
+# l_norm (base spectra) is the mean of the observed normalization window:
+# l_norm = (llow_norm + lupp_norm) / 2
+def norm_from_window(llow_norm, lupp_norm):
+    """(l_norm, llow_norm, lupp_norm) with l_norm the centre of the window."""
+    return (0.5 * (llow_norm + lupp_norm), float(llow_norm), float(lupp_norm))
+
+
+NORM_NIR = norm_from_window(12200.0, 12250.0)      # (12225, 12200, 12250)
+NORM_OPTICAL = norm_from_window(5650.0, 5750.0)    # (5700, 5650, 5750)
+_NORM_KEYS = ("[l_norm", "[llow_norm", "[lupp_norm")
+
+
+def read_config_norm(config_path):
+    """(l_norm, llow_norm, lupp_norm) of a STARLIGHT .config, or None if unreadable."""
+    vals = {}
+    try:
+        with open(config_path) as fh:
+            for line in fh:
+                for k in _NORM_KEYS:
+                    if k in line and k not in vals:
+                        vals[k] = float(line.split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+    if len(vals) != 3:
+        return None
+    return tuple(vals[k] for k in _NORM_KEYS)
+
+
+def write_config_with_norm(src, dst, l_norm, llow_norm, lupp_norm):
+    """Copy a STARLIGHT .config replacing only the three normalization values."""
+    new = dict(zip(_NORM_KEYS, (l_norm, llow_norm, lupp_norm)))
+    out = []
+    with open(src) as fh:
+        for line in fh:
+            for k, v in new.items():
+                if k in line:
+                    tok = line.split()[0]
+                    i = line.index(tok)
+                    rep = f"{v:.1f}"
+                    line = line[:i] + rep.ljust(len(tok)) + line[i + len(tok):]
+                    break
+            out.append(line)
+    os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
+    with open(dst, "w") as fh:
+        fh.writelines(out)
+    return dst
+
+
+def config_for_norm(config_path, norm, out_dir="starlight_input"):
+    """
+    The .config to use for normalization ``norm`` = (l_norm, llow, lupp):
+    ``config_path`` itself if it already has these values, otherwise a copy
+    with them in ``out_dir`` (the original file is never modified).
+    """
+    current = read_config_norm(config_path)
+    if current is None or all(abs(a - b) < 1e-6 for a, b in zip(current, norm)):
+        return config_path
+    base = os.path.basename(config_path)
+    dst = os.path.join(out_dir, f"{base}.norm{norm[1]:.0f}-{norm[2]:.0f}")
+    return write_config_with_norm(config_path, dst, *norm)
+
+
+def base_metallicities(base_file):
+    """
+    Sorted unique metallicities (3rd column) of a STARLIGHT base file
+    (first line N_base, then one line per component:
+    spec-file age Z code Mstar YAV aFe). Components with Z <= 0 (AGN
+    black bodies / power laws) are not stellar populations and are left out.
+    Returns [] if the file cannot be read.
+    """
+    try:
+        with open(base_file) as fh:
+            lines = [l.split() for l in fh if l.strip() and not l.lstrip().startswith('#')]
+        n = int(lines[0][0])
+        zs = {float(t[2]) for t in lines[1:n + 1] if len(t) >= 3 and float(t[2]) > 0}
+    except (OSError, ValueError, IndexError):
+        return []
+    return sorted(zs)
+
+
+def _grid_file_token(path):
+    """
+    Config / base-list file as written in a grid line. STARLIGHT opens these
+    relative to its working directory and reads the line list-directed, where
+    an unquoted '/' ends the record; so a file in another folder is written as
+    a quoted path relative to the working directory, a local file by name.
+    """
+    path = (path or "").strip()
+    if not path:
+        return path
+    try:
+        rel = os.path.relpath(path, ".")
+    except ValueError:
+        rel = os.path.abspath(path)
+    if os.path.dirname(rel) in ("", "."):
+        return os.path.basename(rel)
+    return "'" + rel.replace(os.sep, "/") + "'"
+
+
 def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="grid_", default_mask_file=None,
                         converted_dir=DEFAULT_CONVERTED_DIR):
 
@@ -214,8 +314,8 @@ def generate_grid_files(spec_files, config, output_dir=".", output_grid_prefix="
                     mask_name = f"{base_name}{mask_ext}"
 
                 out_name = f"{base_name}.out"
-                config_name = os.path.basename(config.config_file)
-                base_file_name = os.path.basename(config.base_file)
+                config_name = _grid_file_token(config.config_file)
+                base_file_name = _grid_file_token(config.base_file)
 
                 line = (
                     f"{spec_name} {config_name} {base_file_name} {mask_name} "

@@ -170,28 +170,33 @@ class StarlightOutput:
 
         # 4. Compute Weighted Means and Age Bins
         if not self.pop_vector.empty:
+            # AGN components (black bodies, power laws) always have Z = 0:
+            # only stellar populations (Z > 0) enter means and age bins
+            stellar = self.pop_vector[self.pop_vector["Z"] > 0]
+            # light: weights are fractions of the TOTAL light (FC included), not
+            # renormalized to the stellar light; mass: AGN components have no mass
             total_x = self.pop_vector["x_j"].sum()
-            total_m = self.pop_vector["mcor_j"].sum()
+            total_m = stellar["mcor_j"].sum()
+
+            y_mask = stellar["age_yr"] <= 1.0e8
+            i_mask = (stellar["age_yr"] > 1.0e8) & (stellar["age_yr"] <= 2.0e9)
+            o_mask = stellar["age_yr"] > 2.0e9
 
             if total_x > 0:
-                self.mean_log_age_l = np.sum(self.pop_vector["x_j"] * self.pop_vector["log_age"]) / total_x
-                self.mean_z_l = np.sum(self.pop_vector["x_j"] * self.pop_vector["Z"]) / total_x
+                self.mean_log_age_l = np.sum(stellar["x_j"] * stellar["log_age"]) / total_x
+                self.mean_z_l = np.sum(stellar["x_j"] * stellar["Z"]) / total_x
 
-                y_mask = self.pop_vector["age_yr"] <= 1.0e8
-                i_mask = (self.pop_vector["age_yr"] > 1.0e8) & (self.pop_vector["age_yr"] <= 2.0e9)
-                o_mask = self.pop_vector["age_yr"] > 2.0e9
-
-                self.x_young = self.pop_vector.loc[y_mask, "x_j"].sum()
-                self.x_intermediate = self.pop_vector.loc[i_mask, "x_j"].sum()
-                self.x_old = self.pop_vector.loc[o_mask, "x_j"].sum()
+                self.x_young = stellar.loc[y_mask, "x_j"].sum()
+                self.x_intermediate = stellar.loc[i_mask, "x_j"].sum()
+                self.x_old = stellar.loc[o_mask, "x_j"].sum()
 
             if total_m > 0:
-                self.mean_log_age_m = np.sum(self.pop_vector["mcor_j"] * self.pop_vector["log_age"]) / total_m
-                self.mean_z_m = np.sum(self.pop_vector["mcor_j"] * self.pop_vector["Z"]) / total_m
+                self.mean_log_age_m = np.sum(stellar["mcor_j"] * stellar["log_age"]) / total_m
+                self.mean_z_m = np.sum(stellar["mcor_j"] * stellar["Z"]) / total_m
 
-                self.m_young = self.pop_vector.loc[y_mask, "mcor_j"].sum()
-                self.m_intermediate = self.pop_vector.loc[i_mask, "mcor_j"].sum()
-                self.m_old = self.pop_vector.loc[o_mask, "mcor_j"].sum()
+                self.m_young = stellar.loc[y_mask, "mcor_j"].sum()
+                self.m_intermediate = stellar.loc[i_mask, "mcor_j"].sum()
+                self.m_old = stellar.loc[o_mask, "mcor_j"].sum()
 
         # 5. Parse Synthetic Spectrum Table
         spec_rows = []

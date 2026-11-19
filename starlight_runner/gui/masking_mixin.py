@@ -15,15 +15,32 @@ import matplotlib.pyplot as plt
 from . import constants
 
 from ..reddening import REDDENING_LAWS
-from ..preprocessing import load_spectrum, clean_spectrum, save_spec_file
+from ..preprocessing import load_spectrum, clean_spectrum, save_spec_file, ensure_error_array
 from ..masking import SpectralMask, OPTICAL_EMISSION_LINES, NIR_EMISSION_AND_TELLURIC_LINES
 from ..custom_widgets import InteractiveMaskDialog
 
 class MaskingMixin:
+    def _set_mask_dir_from_file(self, filepath):
+        """Point the mask directory (Step 2 and Step 3 fields) to the folder of a saved mask."""
+        folder = os.path.dirname(os.path.abspath(filepath))
+        rel = self._to_relpath(folder) if hasattr(self, '_to_relpath') else folder
+        if rel in ("", "."):
+            rel = "./"
+        for name in ('txt_mask_dir_step2', 'txt_mask_dir_step3'):
+            w = getattr(self, name, None)
+            if w is not None:
+                w.blockSignals(True)
+                w.setText(rel)
+                w.blockSignals(False)
+        self.starlight_config.mask_dir = rel
+        return rel
+
     def _on_open_detached_mask_dialog(self):
         wl = self.proc_wl if self.proc_wl is not None else self.raw_wl
         flx = self.proc_flux if self.proc_flux is not None else self.raw_flux
         eflx = self.proc_eflux if self.proc_eflux is not None else self.raw_eflux
+        if not getattr(self, 'has_error_spectrum', True):
+            eflx = None
 
         if wl is None or flx is None:
             QMessageBox.warning(self, "No Spectrum", "Please load or preprocess a spectrum first.")
@@ -37,8 +54,13 @@ class MaskingMixin:
             self._update_mask_table()
             self._plot_masking()
 
+            saved = getattr(dlg, 'saved_mask_path', None)
+            if saved and len(self.spectral_mask.intervals) > 0:
+                # saved with "Save" in the dialog (re-saved there on close)
+                rel = self._set_mask_dir_from_file(saved)
+                self.statusBar().showMessage(f"✅ Mask saved: {saved} — mask directory set to {rel}")
             # Automatically persist mask
-            if spec_path and len(self.spectral_mask.intervals) > 0:
+            elif spec_path and len(self.spectral_mask.intervals) > 0:
                 mask_ext = self.starlight_config.mask_ext or ".mask"
                 if not mask_ext.startswith('.'): mask_ext = "." + mask_ext
                 spec_base = os.path.splitext(os.path.basename(spec_path))[0]
@@ -58,6 +80,7 @@ class MaskingMixin:
 
                 try:
                     self.spectral_mask.save_to_file(auto_mask)
+                    self._set_mask_dir_from_file(auto_mask)
                     self.statusBar().showMessage(f"✅ Auto-saved mask: {auto_mask} ({len(self.spectral_mask.intervals)} intervals)")
                 except Exception as e:
                     self.statusBar().showMessage(f"Masking done ({len(self.spectral_mask.intervals)} intervals).")
@@ -87,7 +110,7 @@ class MaskingMixin:
         # 0. Target Spectrum Group
         grp_spec = QGroupBox("0. Target Spectrum")
         f_spec = QVBoxLayout(grp_spec)
-        btn_load_spec_mask = QPushButton("Load Spectrum (.spec, .txt, .fits)")
+        btn_load_spec_mask = QPushButton("Load Spectrum (.spec, .txt, .csv, .fits)")
         btn_load_spec_mask.clicked.connect(self._on_load_spectrum_for_masking_dialog)
         self.lbl_mask_loaded_file = QLabel("No spectrum loaded (or use from Step 1)")
         self.lbl_mask_loaded_file.setProperty("role", "mutedLabel")
@@ -353,7 +376,13 @@ class MaskingMixin:
         self.spectral_mask = SpectralMask.from_preset(preset, wl_range=wl_range)
         self._update_mask_table()
         self._plot_masking()
-        self.statusBar().showMessage(f"Preset '{preset.upper()}' loaded successfully ({len(self.spectral_mask.intervals)} intervals).")
+        # Step 3 synthesis parameters follow the preset; fit range from the spectrum saved in Step 1
+        spec_range = getattr(self, 'saved_spec_range', None) or wl_range
+        info = self._apply_synthesis_preset(preset, spec_range) if hasattr(self, '_apply_synthesis_preset') else ""
+        self.statusBar().showMessage(
+            f"Preset '{preset.upper()}' loaded ({len(self.spectral_mask.intervals)} intervals)."
+            + (f" Step 3: {info}" if info else "")
+        )
 
     def _clear_all_masks(self):
         self.spectral_mask.clear()
@@ -389,9 +418,11 @@ class MaskingMixin:
     def load_spectrum_for_masking(self, filepath):
         try:
             wl, flx, eflx = load_spectrum(filepath)
+            eflx, self.has_error_spectrum = ensure_error_array(flx, eflx)
             wl_c, flx_c, eflx_c = clean_spectrum(wl, flx, eflx)
             self.proc_wl, self.proc_flux, self.proc_eflux = wl_c, flx_c, eflx_c
             self.current_spectrum_path = filepath
+            self.masking_spectrum_path = filepath    # reopened by Load Config / Load Script
             if hasattr(self, 'lbl_mask_loaded_file'):
                 self.lbl_mask_loaded_file.setText(f"{os.path.basename(filepath)} ({len(wl_c)} pts)")
             if hasattr(self, 'lbl_loaded_file'):
@@ -411,6 +442,8 @@ class MaskingMixin:
         wl = self.proc_wl if self.proc_wl is not None else self.raw_wl
         flx = self.proc_flux if self.proc_flux is not None else self.raw_flux
         eflx = self.proc_eflux if self.proc_eflux is not None else self.raw_eflux
+        if not getattr(self, 'has_error_spectrum', True):
+            eflx = None
 
         if wl is not None and flx is not None:
             # 1. Base spectrum
@@ -487,7 +520,11 @@ class MaskingMixin:
             self.starlight_config.mask_file = rel_mask
             if hasattr(self, 'txt_mask_file'):
                 self.txt_mask_file.setText(rel_mask)
-            QMessageBox.information(self, "Mask Saved", f"Mask saved successfully to:\n{filepath}")
+            rel_dir = self._set_mask_dir_from_file(filepath)
+            QMessageBox.information(
+                self, "Mask Saved",
+                f"Mask saved successfully to:\n{filepath}\n\nMask directory set to: {rel_dir}"
+            )
 
     def _on_open_sm_dialog(self):
         filepath, _ = QFileDialog.getOpenFileName(

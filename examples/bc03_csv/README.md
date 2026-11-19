@@ -45,11 +45,12 @@ python examples/bc03_csv/run_example.py testfiles/IntegratedSpec_r_2.0_3.csv
 | File | Origin / role |
 |---|---|
 | `Base.BC03.N` | base list (45 SSPs), from the distribution |
-| `StCv04.C99.config` | distribution config (normalization 4010–4060 Å), `i_verbose_anneal = 0` |
+| `StCv04.C99.config` | distribution config (normalization window 4010–4060 Å), `i_verbose_anneal = 0` and `l_norm = 4035` (mean of the window; the distribution has 4020) |
 | `Masks.EmLines.SDSS.gm` | emission-line mask from the distribution, used for every spectrum |
 | `run_example.py` | converts the CSV, writes the grid, runs the 64-bit binary of the repo, prints the results and saves `fit.png` |
 
-Setup used in the grid: S/N window 4730–4780 Å, fit 3700–6900 Å,
+Setup used in the grid: normalization (= S/N) window 4010–4060 Å with
+l_norm = 4035 Å (its mean), fit 3700–6900 Å,
 Δλ = 1 Å, CCM extinction, kinematics fitted (v0 = 0, σ = 150 km/s initial),
 `IsErrSpecAvailable = 0` because the CSVs have no errors.
 
@@ -62,46 +63,47 @@ from the repository root, which reads the same config/base formats.
 
 ## Loading the example in the GUI (fitter)
 
-STARLIGHT reads the configuration file and the base list (`Base.BC03.N`) from
-the **working directory**, so the GUI must be started from this folder.
+`starlight_gui_config_bc03.json` is a ready GUI state for this example. All
+its paths are relative to the **repository root**, so start the GUI there.
 
-1. Prepare the bases and one mask per spectrum (the GUI looks for
-   `<mask dir>/<spectrum>.mask`):
+1. Once, prepare the bases (uses or downloads the tarball, see above):
 
    ```bash
    python examples/bc03_csv/run_example.py --setup
    ```
 
-   This uses/downloads the tarball as above, fills `BasesDir/` and writes
-   `masks/IntegratedSpec_r_2.0_*.mask` (copies of `Masks.EmLines.SDSS.gm`).
+   This fills `examples/bc03_csv/BasesDir/` with the 45 SSPs. The masks the
+   GUI needs (`masks/<spectrum>.mask`, one per CSV in `testfiles/`) are
+   already in git and are rewritten by `--setup`.
 
-2. Start the GUI from this folder:
+2. From the repository root start the GUI and load the state:
 
    ```bash
-   cd examples/bc03_csv
-   python -m starlight_runner        # package installed (pip install -e .)
-   # or, without installing:  PYTHONPATH=../.. python -m starlight_runner
+   python -m starlight_runner
    ```
 
-3. In **Step 3 (STARLIGHT Grid)** fill in:
+   **Load Config** → `examples/bc03_csv/starlight_gui_config_bc03.json`
 
-   | Field | Value |
-   |---|---|
-   | Starlight Binary | `../../StarlightChains_v04RR_25klines_1000Base.exe` |
-   | Obs Spectra Dir | `../../testfiles` |
-   | Spectrum Extension / Pattern | `*.csv` |
-   | Masks Directory | `masks/` |
-   | Mask Extension | `.mask` |
-   | Configuration File | `StCv04.C99.config` |
-   | Bases Directory | `BasesDir/` |
-   | Base File | `Base.BC03.N` |
-   | Output Directory | `out/` |
-   | Fit λ Lower / Upper (Å) | `3700` / `6900` |
-   | S/N Window Lower / Upper (Å) | `4730` / `4780` |
-   | Error Spectrum | **unchecked** (the CSVs have no error column) |
-   | Flag Spectrum | unchecked |
+3. Step 3 → **Run STARLIGHT** (answer *Yes* to regenerate the grids). The 8
+   CSVs are converted to `starlight_input/*.spec`, the fits go to
+   `examples/bc03_csv/out/` and can be opened in the Results step.
 
-4. **Generate Grid Files** → **Run STARLIGHT**. The CSVs are converted
-   automatically to `starlight_input/*.spec`; the fits go to `out/` and can
-   be opened in the Results step.
+What the state sets:
 
+| Field | Value |
+|---|---|
+| Starlight Binary | `StarlightChains_v04RR_25klines_1000Base.exe` |
+| Obs Spectra Dir / Pattern | `testfiles` / `*.csv` |
+| Masks Directory / Extension | `examples/bc03_csv/masks` / `.mask` |
+| Configuration File | `examples/bc03_csv/StCv04.C99.config` |
+| Bases Directory / Base File | `examples/bc03_csv/BasesDir` / `examples/bc03_csv/Base.BC03.N` |
+| Output Directory | `examples/bc03_csv/out` |
+| Fit λ (Å) | 3700–6900 |
+| Norm Window (= S/N window) / Norm λ for Bases (Å) | 4010–4060 / 4035 (mean) |
+| Error / Flag spectrum | off / off (the CSVs have no error column) |
+| Masking step (Step 2) | the 11 emission-line windows of `Masks.EmLines.SDSS.gm` |
+| PyLight | BC03 metallicities Z = 0.004, 0.02, 0.05; Z☉ = 0.02; no AGN component |
+
+The configuration file and base list live in this folder; the grid writes
+them as quoted paths (`'examples/bc03_csv/StCv04.C99.config'`), because
+STARLIGHT reads the grid line list-directed and an unquoted `/` would end it.

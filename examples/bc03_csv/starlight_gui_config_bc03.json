@@ -1,0 +1,239 @@
+{
+    "exe": "StarlightChains_v04RR_25klines_1000Base.exe",
+    "obs_dir": "testfiles",
+    "spec_ext": "*.csv",
+    "mask_dir": "examples/bc03_csv/masks",
+    "mask_ext": ".mask",
+    "config_file": "examples/bc03_csv/StCv04.C99.config",
+    "base_dir": "examples/bc03_csv/BasesDir",
+    "base_file": "examples/bc03_csv/Base.BC03.N",
+    "out_dir": "examples/bc03_csv/out",
+    "fit_ini": 3700.0,
+    "fit_fin": 6900.0,
+    "sn_low": 4010.0,
+    "sn_upp": 4060.0,
+    "l_norm": 4035.0,
+    "llow_norm": 4010.0,
+    "lupp_norm": 4060.0,
+    "kinematics": "FIT",
+    "procs": 4,
+    "is_err_available": 0,
+    "is_flag_available": 0,
+    "seed": 33087221,
+    "mc_enabled": false,
+    "mc_n": 100,
+    "mc_dir": "examples/bc03_csv/mcmc",
+    "mc_keep_spectra": false,
+    "z": 0.0,
+    "law": "CCM (Cardelli+89 MW)",
+    "av": 0.0,
+    "rv": 3.1,
+    "rebin_step": 1.0,
+    "telluric_cuts": [],
+    "trim_bounds_enabled": false,
+    "trim_min": 3700.0,
+    "trim_max": 6930.0,
+    "masks": [
+        {
+            "low": 3710.0,
+            "upp": 3744.0,
+            "weight": 0.0,
+            "name": "[OII]"
+        },
+        {
+            "low": 3858.0,
+            "upp": 3880.0,
+            "weight": 0.0,
+            "name": "[NeIII]"
+        },
+        {
+            "low": 3960.0,
+            "upp": 3980.0,
+            "weight": 0.0,
+            "name": "Hepsilon"
+        },
+        {
+            "low": 4092.0,
+            "upp": 4112.0,
+            "weight": 0.0,
+            "name": "Hdelta"
+        },
+        {
+            "low": 4330.0,
+            "upp": 4350.0,
+            "weight": 0.0,
+            "name": "Hgamma"
+        },
+        {
+            "low": 4848.0,
+            "upp": 4874.0,
+            "weight": 0.0,
+            "name": "Hbeta"
+        },
+        {
+            "low": 4940.0,
+            "upp": 5028.0,
+            "weight": 0.0,
+            "name": "[OIII]"
+        },
+        {
+            "low": 5866.0,
+            "upp": 5916.0,
+            "weight": 0.0,
+            "name": "HeI"
+        },
+        {
+            "low": 6280.0,
+            "upp": 6320.0,
+            "weight": 0.0,
+            "name": "[OI]"
+        },
+        {
+            "low": 6528.0,
+            "upp": 6608.0,
+            "weight": 0.0,
+            "name": "Halpha"
+        },
+        {
+            "low": 6696.0,
+            "upp": 6752.0,
+            "weight": 0.0,
+            "name": "[SII]"
+        }
+    ],
+    "pylight_config": {
+        "Zs": [
+            0.004,
+            0.02,
+            0.05
+        ],
+        "IsAGNComp": false,
+        "OnlyFC": false,
+        "pltmask": false,
+        "NormFac": 1,
+        "SaveDist": true,
+        "zsun": 0.02,
+        "BinPopVecLab": [
+            "xy",
+            "xiy",
+            "xio",
+            "xo"
+        ],
+        "BinPopVecMassLab": [
+            "my",
+            "miy",
+            "mio",
+            "mo"
+        ],
+        "BinPopVec": {
+            "xy": [
+                1000.0,
+                100000000.0
+            ],
+            "xiy": [
+                101000000.0,
+                700000000.0
+            ],
+            "xio": [
+                750000000.0,
+                2000000000.0
+            ],
+            "xo": [
+                2100000000.0,
+                15000000000.0
+            ]
+        },
+        "BinSFRLabs": [
+            "SFR_1E6",
+            "SFR_5E6",
+            "SFR_10E6",
+            "SFR_14E6",
+            "SFR_20E6",
+            "SFR_30E6",
+            "SFR_56E6",
+            "SFR_100E6",
+            "SFR_200E6"
+        ],
+        "BinSFR": {
+            "SFR_1E6": [
+                10,
+                1001000.0
+            ],
+            "SFR_5E6": [
+                10,
+                5621000.0
+            ],
+            "SFR_10E6": [
+                10,
+                10001000.0
+            ],
+            "SFR_14E6": [
+                10,
+                14100100.0
+            ],
+            "SFR_20E6": [
+                10,
+                20001000.0
+            ],
+            "SFR_30E6": [
+                10,
+                31600100.0
+            ],
+            "SFR_56E6": [
+                10,
+                56201000.0
+            ],
+            "SFR_100E6": [
+                10,
+                100001000.0
+            ],
+            "SFR_200E6": [
+                10,
+                200001000.0
+            ]
+        },
+        "BinHDVecLab": [
+            "BB_c",
+            "BB_h",
+            "HDTot"
+        ],
+        "BinHDVec": {
+            "BB_c": [
+                0,
+                1000
+            ],
+            "BB_h": [
+                1000,
+                1500
+            ],
+            "HDTot": [
+                0,
+                1500
+            ]
+        },
+        "BinFCVecLab": [
+            "FC0.25",
+            "FC0.50",
+            "FC0.75",
+            "FCTot"
+        ],
+        "BinFCVec": {
+            "FC0.25": [
+                0.0,
+                0.25
+            ],
+            "FC0.50": [
+                0.25,
+                0.5
+            ],
+            "FC0.75": [
+                0.5,
+                0.75
+            ],
+            "FCTot": [
+                0.0,
+                0.75
+            ]
+        }
+    }
+}

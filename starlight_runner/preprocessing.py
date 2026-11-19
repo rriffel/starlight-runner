@@ -19,6 +19,21 @@ DEFAULT_TELLURIC_REGIONS = [
 ]
 
 
+def ensure_error_array(flux, eflux=None):
+    """
+    Always give the pipeline an error vector.
+
+    Returns ``(eflux, has_error)``: the real error array and True when the
+    spectrum has one; otherwise a placeholder array of zeros and False.
+    The placeholder only keeps every step working with (wl, flux, eflux);
+    it must not be shown or saved as an error (see ``save_spec_file``).
+    """
+    flux = np.asarray(flux, dtype=np.float64)
+    if eflux is None:
+        return np.zeros_like(flux), False
+    return np.asarray(eflux, dtype=np.float64), True
+
+
 def load_spectrum(filepath):
     """
     Load spectrum from various formats: .txt, .dat, .csv, .spec, or .fits.
@@ -507,12 +522,20 @@ def save_spec_file(filepath, wl, flux, eflux=None, flags=None):
     Save spectrum to Starlight ASCII .spec format:
     col 1: Wavelength (Angstroms)
     col 2: Flux
-    col 3: Error (optional, default 1e-20 if none)
+    col 3: Error (only when ``eflux`` is given)
     col 4: Flag (optional, default 0)
+
+    Without ``eflux`` (spectrum with no error column) only lambda and flux are
+    written, so no fake error reaches STARLIGHT (use IsErrSpecAvailable = 0).
     """
     wl = np.asarray(wl, dtype=np.float64)
     flux = np.asarray(flux, dtype=np.float64)
-    
+
+    if eflux is None and flags is None:
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        np.savetxt(filepath, np.column_stack((wl, flux)), fmt=['%.4f', '%.7e'], delimiter=' ')
+        return filepath
+
     if eflux is None:
         # Default nominal error of 5% of flux or small positive constant
         eflux = np.maximum(np.abs(flux) * 0.05, 1e-20)
@@ -530,6 +553,51 @@ def save_spec_file(filepath, wl, flux, eflux=None, flags=None):
     os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
     np.savetxt(filepath, data, fmt=fmt, delimiter=' ')
     return filepath
+
+
+def preprocess_spectrum(wl, flux, eflux, z=0.0, law="CCM (Cardelli+89 MW)", av=0.0, rv=3.1,
+                        downgrade=None, trim=None, rebin_step=1.0, exclude_regions=None):
+    """
+    Step 1 of the GUI, in its order: deredden -> rest frame -> (downgrade
+    resolution) -> (trim bounds) -> rebin -> exclude cut regions.
+
+    ``eflux`` must be an array (``ensure_error_array`` for spectra without
+    errors). ``downgrade``: None or dict(mode='R'|'sigma'|'FWHM', val_ini,
+    val_target, file_ini, file_target). ``trim``: None or (wl_min, wl_max).
+    ``exclude_regions``: [(low, upp), ...] removed after rebinning.
+    """
+    wl_d, flx_d, eflx_d = deredden(wl, flux, eflux=eflux, law=law, av=av, rv=rv)
+    wl_c, flx_c, eflx_c = apply_redshift(wl_d, z), flx_d, eflx_d
+
+    if downgrade:
+        wl_c, flx_c, eflx_c = downgrade_resolution(
+            wl_c, flx_c, eflux=eflx_c, mode=downgrade.get("mode", "R"),
+            val_ini=downgrade.get("val_ini"), val_target=downgrade.get("val_target"),
+            file_ini=downgrade.get("file_ini"), file_target=downgrade.get("file_target"))
+
+    if trim and trim[0] < trim[1]:
+        wl_c, flx_c, eflx_c = trim_spectral_bounds(wl_c, flx_c, eflux=eflx_c, wl_min=trim[0], wl_max=trim[1])
+
+    if len(wl_c) < 3:
+        raise ValueError("Too few valid data points remaining after cuts. Please adjust boundary limits.")
+
+    wl_r, flx_r, eflx_r = rebin_spectrum(wl_c, flx_c, eflux=eflx_c, step=rebin_step)
+    if exclude_regions:
+        wl_r, flx_r, eflx_r = exclude_spectral_regions(wl_r, flx_r, eflux=eflx_r, regions=list(exclude_regions))
+    return wl_r, flx_r, eflx_r
+
+
+def preprocess_file(filepath, output_spec_path, **params):
+    """
+    Load ``filepath`` (any format), apply ``preprocess_spectrum(**params)`` and
+    save a STARLIGHT .spec (lambda flux [error]; no error column if the input
+    has none). Returns the output path.
+    """
+    wl, flx, eflx = load_spectrum(filepath)
+    eflx, has_error = ensure_error_array(flx, eflx)
+    wl, flx, eflx = clean_spectrum(wl, flx, eflx)
+    wl, flx, eflx = preprocess_spectrum(wl, flx, eflx, **params)
+    return save_spec_file(output_spec_path, wl, flx, eflx if has_error else None)
 
 
 def preprocess_pipeline(
@@ -559,6 +627,8 @@ def preprocess_pipeline(
     6. Save to .spec (if path specified)
     """
     raw_wl, raw_flx, raw_eflx = load_spectrum(filepath)
+    # always (wl, flux, eflux); a missing error column becomes a placeholder
+    raw_eflx, has_error = ensure_error_array(raw_flx, raw_eflx)
     wl_c, flx_c, eflx_c = clean_spectrum(raw_wl, raw_flx, raw_eflx)
     
     # 2. Physical Corrections: Dereddening
@@ -592,6 +662,9 @@ def preprocess_pipeline(
     else:
         wl_final, flx_final, eflx_final = wl_rebin, flx_rebin, eflx_rebin
         
+    if not has_error:
+        eflx_final = None  # placeholder is not an error: not saved nor returned
+
     if output_spec_path:
         save_spec_file(output_spec_path, wl_final, flx_final, eflx_final)
         

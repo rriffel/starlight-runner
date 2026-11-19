@@ -23,6 +23,14 @@ from .runner import StarlightConfig, generate_grid_files, run_single_grid, run_s
 from .parser import StarlightOutput
 
 
+def __getattr__(name):
+    # StarlightRunner (scripting API) is loaded on first use
+    if name == "StarlightRunner":
+        from .scripting import StarlightRunner
+        return StarlightRunner
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def test():
     """Run all unit tests for the starlight_runner package."""
     from .tests import run_tests

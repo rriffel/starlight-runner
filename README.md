@@ -128,7 +128,7 @@ python -m starlight_runner
 5. **Telluric & Boundary Trimming:**
    - **Interactive Cutting:** Click directly on the plot or open the *Detached Cut Window (Full Screen)* to trim telluric bands or extreme boundaries.
    - **NIR Preset:** One-click application of standard NIR telluric water vapor bands ($1.34 - 1.42\ \mu\text{m}$ and $1.80 - 1.90\ \mu\text{m}$).
-6. **Export:** Save cleaned `.spec` file and advance to Step 2.
+6. **Export:** Save the preprocessed spectrum (`<spectrum>_prepross.spec`) and advance to Step 2.
 
 ---
 
@@ -254,6 +254,36 @@ print(f"A_V: {out.av:.2f} mag")
 print(f"Mean log(Age)_L: {out.mean_log_age_l:.2f} yr")
 print(f"Mean Z_L: {out.mean_z_l:.4f}")
 ```
+
+---
+
+### Run scripts (`StarlightRunner`)
+
+`StarlightRunner` does what Step 3 of the GUI does — CSV conversion, base check,
+normalization window, standard mask, grids, STARLIGHT, Monte Carlo — and writes
+the PyLight table of the fits, without the GUI:
+
+```python
+from starlight_runner import StarlightRunner
+
+runner = StarlightRunner(procs=4, workdir="aula")      # paths below are relative to workdir
+runner.set_paths(starlight_exe="StarlightChains_v04RR_25klines_1000Base.exe",
+                 obs_dir="spectra", spec_pattern="*.csv",
+                 mask_dir="mask", mask_ext=".mask", standard_mask=None,
+                 config_file="StCv04.C99.config", base_dir="BasesDir",
+                 base_file="Base.BC03.N", out_dir="out")
+runner.set_synthesis(fit_range=(3700, 6900), norm_window=(4010, 4060),   # norm = S/N window
+                     kinematics="FIT", error_spectrum=False)
+runner.set_monte_carlo(enabled=False)
+runner.set_pylight(galaxy_distance=0.0, table="pylight_props.csv")
+runner.execute()          # update_config_norm=True rewrites the .config if its window differs
+```
+
+In the GUI, **Export Script (.py)** writes the current configuration as such a
+script and **Load Script (.py)** fills the GUI from one (as in urutau; loading
+runs the script's code with a recording runner, STARLIGHT itself is not run).
+From a saved GUI state: `python -m starlight_runner.scripting state.json -o run_starlight.py`,
+or `StarlightRunner.from_gui_state("state.json").execute()`.
 
 ---
 

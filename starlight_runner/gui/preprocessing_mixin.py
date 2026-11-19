@@ -16,7 +16,7 @@ from . import constants
 
 from ..reddening import REDDENING_LAWS, deredden
 from ..preprocessing import (
-    load_spectrum, clean_spectrum, apply_redshift,
+    load_spectrum, clean_spectrum, apply_redshift, ensure_error_array, preprocess_spectrum,
     rebin_spectrum, exclude_spectral_regions,
     trim_spectral_bounds, save_spec_file, DEFAULT_TELLURIC_REGIONS,
     downgrade_resolution, varsmooth, varsmooth_error
@@ -45,7 +45,7 @@ class PreprocessingMixin:
         # 1. File Load Group
         grp_load = QGroupBox("1. Load Spectrum")
         f_load = QVBoxLayout(grp_load)
-        btn_open = QPushButton("Load Spectrum (.txt, .spec, .fits)")
+        btn_open = QPushButton("Load Spectrum (.txt, .spec, .csv, .fits)")
         btn_open.clicked.connect(self._on_load_spectrum_dialog)
         self.lbl_loaded_file = QLabel("No file loaded")
         self.lbl_loaded_file.setProperty("role", "mutedLabel")
@@ -411,7 +411,7 @@ class PreprocessingMixin:
 
             self.preproc_click_pt = None
             self._update_cuts_table()
-            self._run_preprocessing_internal(silent=True)
+            self._live_preprocess()
             self._plot_preprocessing()
 
     def _on_preproc_key_press(self, event):
@@ -427,7 +427,7 @@ class PreprocessingMixin:
                 for idx in reversed(to_remove):
                     del self.telluric_cuts[idx]
                 self._update_cuts_table()
-                self._run_preprocessing_internal(silent=True)
+                self._live_preprocess()
                 self._plot_preprocessing()
                 self.statusBar().showMessage(f"🗑️ Cut removed at {x:.1f} Å.")
 
@@ -503,7 +503,7 @@ class PreprocessingMixin:
 
     def _on_preproc_param_changed(self):
         if self.raw_wl is not None:
-            self._run_preprocessing_internal(silent=True)
+            self._live_preprocess()
             self._plot_preprocessing()
 
     def _apply_nir_telluric_preset(self):
@@ -516,7 +516,7 @@ class PreprocessingMixin:
             if not any(abs(c["low"] - low) < 50 and abs(c["upp"] - upp) < 50 for c in self.telluric_cuts):
                 self.telluric_cuts.append({"low": low, "upp": upp, "name": "NIR Telluric gap"})
         self._update_cuts_table()
-        self._run_preprocessing_internal(silent=True)
+        self._live_preprocess()
         self._plot_preprocessing()
         self.statusBar().showMessage("NIR telluric band presets loaded.")
 
@@ -524,7 +524,7 @@ class PreprocessingMixin:
         self.telluric_cuts.clear()
         self.preproc_click_pt = None
         self._update_cuts_table()
-        self._run_preprocessing_internal(silent=True)
+        self._live_preprocess()
         self._plot_preprocessing()
         self.statusBar().showMessage("All cut regions removed.")
 
@@ -536,7 +536,7 @@ class PreprocessingMixin:
             return
         self.telluric_cuts.append({"low": low, "upp": upp, "name": "Telluric cut"})
         self._update_cuts_table()
-        self._run_preprocessing_internal(silent=True)
+        self._live_preprocess()
         self._plot_preprocessing()
 
     def _remove_selected_cut(self):
@@ -544,7 +544,7 @@ class PreprocessingMixin:
         if 0 <= row < len(self.telluric_cuts):
             self.telluric_cuts.pop(row)
             self._update_cuts_table()
-            self._run_preprocessing_internal(silent=True)
+            self._live_preprocess()
             self._plot_preprocessing()
 
     def _update_cuts_table(self):
@@ -564,10 +564,17 @@ class PreprocessingMixin:
     def load_spectrum_file(self, filepath):
         try:
             wl, flx, eflx = load_spectrum(filepath)
+            # Always carry (wl, flux, eflux): files without an error column
+            # (e.g. CSV) get a placeholder that is never plotted nor saved.
+            eflx, self.has_error_spectrum = ensure_error_array(flx, eflx)
             wl_c, flx_c, eflx_c = clean_spectrum(wl, flx, eflx)
             self.raw_wl, self.raw_flux, self.raw_eflux = wl_c, flx_c, eflx_c
             self.current_spectrum_path = filepath
-            self.lbl_loaded_file.setText(os.path.basename(filepath))
+            self.step1_spectrum_path = filepath      # reopened by Load Config / Load Script
+            self.masking_spectrum_path = None
+            self.lbl_loaded_file.setText(
+                os.path.basename(filepath) + ("" if self.has_error_spectrum else "  (no error column)")
+            )
 
             # Set default trim bounds without triggering cascading events
             if len(wl_c) > 0:
@@ -578,90 +585,57 @@ class PreprocessingMixin:
                 self.spin_trim_min.blockSignals(False)
                 self.spin_trim_max.blockSignals(False)
 
-            self._run_preprocessing_internal(silent=True)
-            pts_reb = len(self.proc_wl) if self.proc_wl is not None else 0
-            self.statusBar().showMessage(f"Loaded: {os.path.basename(filepath)} ({len(wl_c)} raw points, {pts_reb} rebinned points)")
-            self._plot_preprocessing()
+            # Loading only shows the raw spectrum; nothing is processed until
+            # "Run Preprocessing" (after that, parameter changes update live).
+            self.proc_wl = self.proc_flux = self.proc_eflux = None
+            self._preproc_done = False
+            self._step1_processed = False
+            self.statusBar().showMessage(
+                f"Loaded: {os.path.basename(filepath)} ({len(wl_c)} raw points). "
+                "Set the corrections and click 'Run Preprocessing'."
+            )
+            self._plot_preprocessing(preserve_limits=False)
         except Exception as e:
             QMessageBox.critical(self, "Error Loading Spectrum", str(e))
+
+    def _step1_params(self):
+        """Step 1 settings as keyword arguments of preprocessing.preprocess_spectrum."""
+        downgrade = None
+        if hasattr(self, 'chk_downgrade_res') and self.chk_downgrade_res.isChecked():
+            idx = self.combo_res_mode.currentIndex()
+            ini_file = getattr(self, "res_ini_file_path", None) if self.rad_res_ini_file.isChecked() else None
+            tgt_file = getattr(self, "res_tgt_file_path", None) if self.rad_res_tgt_file.isChecked() else None
+            downgrade = {
+                "mode": "R" if idx == 0 else ("sigma" if idx == 1 else "FWHM"),
+                "val_ini": None if ini_file else self.spin_res_ini.value(),
+                "file_ini": ini_file or None,
+                "val_target": None if tgt_file else self.spin_res_tgt.value(),
+                "file_target": tgt_file or None,
+            }
+        trim = None
+        if self.chk_trim_bounds.isChecked():
+            trim = (self.spin_trim_min.value(), self.spin_trim_max.value())
+        return dict(
+            z=self.spin_z.value(), law=self.combo_law.currentText(),
+            av=self.spin_av.value(), rv=self.spin_rv.value(),
+            downgrade=downgrade, trim=trim, rebin_step=self.spin_rebin_step.value(),
+            exclude_regions=[(c["low"], c["upp"]) for c in self.telluric_cuts] if self.telluric_cuts else None,
+        )
+
+    def _live_preprocess(self):
+        """Re-run preprocessing for live preview, only after 'Run Preprocessing' was used."""
+        if getattr(self, '_preproc_done', False):
+            self._run_preprocessing_internal(silent=True)
 
     def _run_preprocessing_internal(self, silent=True):
         if self.raw_wl is None:
             return False
 
         try:
-            z = self.spin_z.value()
-            av = self.spin_av.value()
-            rv = self.spin_rv.value()
-            law = self.combo_law.currentText()
-            step = self.spin_rebin_step.value()
-
-            # 1. Physical Corrections: Deredden (Galactic Extinction)
-            wl_d, flx_d, eflx_d = deredden(
-                self.raw_wl, self.raw_flux, eflux=self.raw_eflux,
-                law=law, av=av, rv=rv
+            # same function the run scripts use (preprocessing.preprocess_spectrum)
+            wl_reb, flx_reb, eflx_reb = preprocess_spectrum(
+                self.raw_wl, self.raw_flux, self.raw_eflux, **self._step1_params()
             )
-
-            # 2. Shift to rest frame (redshift correction)
-            wl_rest = apply_redshift(wl_d, z)
-            flx_rest = flx_d
-            eflx_rest = eflx_d
-
-            # 3. Downgrade Resolution (Optional)
-            if hasattr(self, 'chk_downgrade_res') and self.chk_downgrade_res.isChecked():
-                idx = self.combo_res_mode.currentIndex()
-                mode_val = "R" if idx == 0 else ("sigma" if idx == 1 else "FWHM")
-
-                if hasattr(self, 'rad_res_ini_file') and self.rad_res_ini_file.isChecked() and getattr(self, "res_ini_file_path", None):
-                    val_ini = None
-                    file_ini = self.res_ini_file_path
-                else:
-                    val_ini = self.spin_res_ini.value()
-                    file_ini = None
-
-                if hasattr(self, 'rad_res_tgt_file') and self.rad_res_tgt_file.isChecked() and getattr(self, "res_tgt_file_path", None):
-                    val_tgt = None
-                    file_tgt = self.res_tgt_file_path
-                else:
-                    val_tgt = self.spin_res_tgt.value()
-                    file_tgt = None
-
-                wl_curr, flx_curr, eflx_curr = downgrade_resolution(
-                    wl_rest, flx_rest, eflux=eflx_rest,
-                    mode=mode_val, val_ini=val_ini, val_target=val_tgt,
-                    file_ini=file_ini, file_target=file_tgt
-                )
-            else:
-                wl_curr = wl_rest
-                flx_curr = flx_rest
-                eflx_curr = eflx_rest
-
-            # 4. Global boundary trimming if enabled
-            if self.chk_trim_bounds.isChecked():
-                w_min = self.spin_trim_min.value()
-                w_max = self.spin_trim_max.value()
-                if w_min < w_max:
-                    wl_curr, flx_curr, eflx_curr = trim_spectral_bounds(
-                        wl_curr, flx_curr, eflux=eflx_curr, wl_min=w_min, wl_max=w_max
-                    )
-
-            if len(wl_curr) < 3:
-                if not silent:
-                    raise ValueError("Too few valid data points remaining after cuts. Please adjust boundary limits.")
-                return False
-
-            # 5. Rebinning
-            wl_reb, flx_reb, eflx_reb = rebin_spectrum(
-                wl_curr, flx_curr, eflux=eflx_curr, step=step
-            )
-
-            # 6. Exclude telluric / interactive cut regions
-            if self.telluric_cuts:
-                cut_intervals = [(c["low"], c["upp"]) for c in self.telluric_cuts]
-                wl_reb, flx_reb, eflx_reb = exclude_spectral_regions(
-                    wl_reb, flx_reb, eflux=eflx_reb, regions=cut_intervals
-                )
-
             self.proc_wl, self.proc_flux, self.proc_eflux = wl_reb, flx_reb, eflx_reb
             return True
         except Exception as e:
@@ -677,6 +651,8 @@ class PreprocessingMixin:
         try:
             ok = self._run_preprocessing_internal(silent=False)
             if ok and self.proc_wl is not None:
+                self._preproc_done = True
+                self._step1_processed = True
                 self._plot_preprocessing()
                 self.statusBar().showMessage(f"Preprocessing completed successfully ({len(self.proc_wl)} points, Δλ={self.spin_rebin_step.value():.2f} Å).")
         except Exception as e:
@@ -694,7 +670,7 @@ class PreprocessingMixin:
 
         if self.proc_wl is not None:
             ax.plot(self.proc_wl, self.proc_flux, color="#2563EB", lw=1.5, label="Corrected & Rebinned")
-            if self.proc_eflux is not None:
+            if self.proc_eflux is not None and getattr(self, 'has_error_spectrum', True):
                 ax.fill_between(
                     self.proc_wl,
                     self.proc_flux - self.proc_eflux,
@@ -781,20 +757,24 @@ class PreprocessingMixin:
             QMessageBox.warning(self, "No Data", "Failed to process spectrum for export.")
             return False
 
-        default_name = "spectrum_clean.spec"
+        # preprocessed spectra are named <spectrum>_prepross.spec
+        default_name = "spectrum_prepross.spec"
         if self.current_spectrum_path:
             base = os.path.splitext(os.path.basename(self.current_spectrum_path))[0]
-            if base.endswith("_clean"):
+            if base.endswith("_prepross"):
                 default_name = f"{base}.spec"
             else:
-                default_name = f"{base}_clean.spec"
+                default_name = f"{base}_prepross.spec"
 
         out_path, _ = QFileDialog.getSaveFileName(
             self, "Save STARLIGHT Spec File", default_name, "STARLIGHT Spec (*.spec);;All Files (*)"
         )
         if out_path:
-            save_spec_file(out_path, wl, flx, eflx)
+            # no error column in the input: save only lambda, flux (placeholder ignored)
+            save_spec_file(out_path, wl, flx, eflx if getattr(self, 'has_error_spectrum', True) else None)
+            self.saved_spec_range = (float(wl[0]), float(wl[-1]))  # used by the Step 2 presets (fit range)
             self.current_spectrum_path = out_path
+            self.masking_spectrum_path = out_path    # Step 2 works on the saved spectrum
             if hasattr(self, 'lbl_mask_loaded_file'):
                 self.lbl_mask_loaded_file.setText(f"{os.path.basename(out_path)} ({len(wl)} pts)")
 
@@ -818,7 +798,7 @@ class PreprocessingMixin:
     def _on_open_detached_cut_dialog(self):
         wl = self.raw_wl
         flx = self.raw_flux
-        eflx = self.raw_eflux
+        eflx = self.raw_eflux if getattr(self, 'has_error_spectrum', True) else None
 
         if wl is None or flx is None:
             QMessageBox.warning(self, "No Spectrum", "Please load a spectrum in Step 1 first.")
@@ -828,6 +808,6 @@ class PreprocessingMixin:
         if dlg.exec_() == QDialog.Accepted:
             self.telluric_cuts = dlg.telluric_cuts
             self._update_cuts_table()
-            self._run_preprocessing_internal(silent=True)
+            self._live_preprocess()
             self._plot_preprocessing()
             self.statusBar().showMessage(f"Cuts updated ({len(self.telluric_cuts)} regions cut).")

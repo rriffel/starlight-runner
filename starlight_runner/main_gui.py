@@ -31,6 +31,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 
 from .masking import SpectralMask
+from .pylight_reader import default_pylight_config
 from .runner import StarlightConfig
 
 # Shared styling constants & light/dark theming
@@ -71,25 +72,8 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
         if logo_path:
             self.setWindowIcon(QIcon(logo_path))
 
-        # Pylight Configuration (from ConfigPylight)
-        self.pylight_config = {
-            'Zs': [0.00382, 0.00959, 0.0152, 0.02409],
-            'IsAGNComp': True,
-            'OnlyFC': False,
-            'pltmask': False,
-            'NormFac': 1,
-            'SaveDist': True,
-            'zsun': 0.0152,
-            'BinPopVecLab': ['xy', 'xiy', 'xio', 'xo'],
-            'BinPopVecMassLab': ['my', 'miy', 'mio', 'mo'],
-            'BinPopVec': {'xy': [1E3, 100e6], 'xiy': [101e6, 700e6], 'xio': [750E6, 2E9], 'xo': [2.10e9, 15e9]},
-            'BinSFRLabs': ['SFR_1E6', 'SFR_5E6', 'SFR_10E6', 'SFR_14E6', 'SFR_20E6', 'SFR_30E6', 'SFR_56E6', 'SFR_100E6', 'SFR_200E6'],
-            'BinSFR': {"SFR_1E6": [10,1.001E6], "SFR_5E6": [10,5.621E6], "SFR_10E6": [10,10.001E6],"SFR_14E6":[10,14.1001E6],"SFR_20E6": [10,20.001E6],"SFR_30E6": [10,31.6001E6],"SFR_56E6": [10,56.201E6],"SFR_100E6":[10,100.001E6],"SFR_200E6": [10,200.001E6]},
-            'BinHDVecLab': ['BB_c', 'BB_h', 'HDTot'],
-            'BinHDVec': {'BB_c': [0, 1000], 'BB_h': [1000, 1500], 'HDTot': [0, 1500]},
-            'BinFCVecLab': ['FC1.25', 'FC1.50', 'FC1.75', 'FCTot'],
-            'BinFCVec': {'FC1.25': [0, 1.25], 'FC1.50': [1.26, 1.50], 'FC1.75': [1.51, 1.75], 'FCTot': [0, 1.76]}
-        }
+        # Pylight Configuration (from ConfigPylight); same defaults as the scripting API
+        self.pylight_config = default_pylight_config()
 
 
         self.resize(1350, 900)
@@ -143,6 +127,7 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
         self.page_masking = self._create_step2_masking()
         self.page_runner = self._create_step3_runner()
         self.page_results = self._create_step4_results()
+        self._sync_pylight_zs()  # PyLight metallicities = unique Z of the Step 3 Base File
 
         self.pages.addWidget(self.page_preprocess)
         self.pages.addWidget(self.page_masking)
@@ -222,6 +207,22 @@ class MainWindow(QMainWindow, PreprocessingMixin, MaskingMixin, GridMixin, Resul
         btn_save_cfg.setCursor(Qt.PointingHandCursor)
         btn_save_cfg.clicked.connect(self._on_save_config_state)
         layout.addWidget(btn_save_cfg)
+
+        # Run scripts (.py): standalone, GUI-free; can be loaded back (as in urutau)
+        btn_export_script = QPushButton("Export Script (.py)")
+        btn_export_script.setProperty("role", "secondaryBtn")
+        btn_export_script.setCursor(Qt.PointingHandCursor)
+        btn_export_script.setToolTip("Write the Step 3 / PyLight configuration as a Python script that runs\n"
+                                     "STARLIGHT without the GUI (python run_starlight.py)")
+        btn_export_script.clicked.connect(self._on_export_script)
+        layout.addWidget(btn_export_script)
+
+        btn_load_script = QPushButton("Load Script (.py)")
+        btn_load_script.setProperty("role", "secondaryBtn")
+        btn_load_script.setCursor(Qt.PointingHandCursor)
+        btn_load_script.setToolTip("Fill the GUI from a run script (runs the script's code; STARLIGHT is not run)")
+        btn_load_script.clicked.connect(self._on_load_script)
+        layout.addWidget(btn_load_script)
 
         layout.addSpacing(12)
 

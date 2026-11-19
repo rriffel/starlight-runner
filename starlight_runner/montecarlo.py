@@ -354,7 +354,18 @@ def _config_from_gui_state(path):
         "is_err_available": "is_err_available", "is_flag_available": "is_flag_available",
     }
     kwargs = {v: st[k] for k, v in keymap.items() if k in st and st[k] not in ("", None)}
-    return StarlightConfig(**kwargs), st.get("pylight_config", {})
+    # normalization window = S/N window; l_norm = its mean (copy of the .config if it differs)
+    lo = st.get("llow_norm", st.get("sn_low"))
+    hi = st.get("lupp_norm", st.get("sn_upp"))
+    if lo is not None and hi is not None:
+        from .runner import config_for_norm, norm_from_window
+        kwargs["llow_sn"], kwargs["lupp_sn"] = lo, hi
+        if os.path.isfile(kwargs.get("config_file", "")):
+            kwargs["config_file"] = config_for_norm(kwargs["config_file"], norm_from_window(lo, hi))
+    from .pylight_reader import migrate_fc_bins
+    pyl = st.get("pylight_config", {})
+    migrate_fc_bins(pyl)
+    return StarlightConfig(**kwargs), pyl
 
 
 def main(argv=None):

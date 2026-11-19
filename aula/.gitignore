@@ -1,0 +1,4 @@
+# keep the class configs/grid in git (the root .gitignore ignores these patterns)
+!starlight_gui_config_aula.json
+!starlight_gui_config.json
+!grid_1.inp
